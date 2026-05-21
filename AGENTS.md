@@ -165,6 +165,68 @@ Brain does not strictly need either mechanism for review/merge work
 on its own — both mechanisms only matter when decomper and cloud
 run in parallel.
 
+## PRs and the fork remote
+
+This repo lives at [`xbret/xenoblade`](https://github.com/xbret/xenoblade).
+cntrl_alt_lenny does **not** own that repo — he contributes via a
+personal fork at
+[`cntrl-alt-lenny/xenoblade`](https://github.com/cntrl-alt-lenny/xenoblade).
+
+Every local clone on cntrl_alt_lenny's machines should have two git
+remotes set up:
+
+| Remote   | URL                                       | Purpose                                          |
+|----------|-------------------------------------------|--------------------------------------------------|
+| `origin` | `https://github.com/xbret/xenoblade.git`  | Upstream. **Pull** from here; never push.        |
+| `fork`   | `https://github.com/cntrl-alt-lenny/xenoblade.git` | The user's fork. **Push** branches here. |
+
+Verify with `git remote -v`. If `fork` is missing, add it:
+
+```sh
+git remote add fork https://github.com/cntrl-alt-lenny/xenoblade.git
+```
+
+### How a PR flows
+
+1. Branch off `origin/main`:
+   `git checkout -b decomper/<scope> origin/main`
+   (or `cloud/<scope>` / `brain/<scope>`).
+2. Commit work locally.
+3. Push to the **fork**, not origin:
+   `git push -u fork decomper/<scope>`.
+4. Open a PR from `cntrl-alt-lenny:<branch>` → `xbret:main`:
+   `gh pr create --repo xbret/xenoblade --base main --head cntrl-alt-lenny:<branch>`.
+   `gh` will figure out the head automatically once the branch is
+   pushed; the explicit `--head` form above is the unambiguous
+   spelling.
+5. After upstream merges, delete the fork-side branch:
+   `git push fork --delete <branch>` and `git branch -d <branch>`
+   locally.
+
+### Listing PRs
+
+- **Upstream open PRs** (what brain reviews):
+  `gh pr list --repo xbret/xenoblade --state open`.
+- **Fork-side draft PRs** (rare; only if the user opens a self-review
+  PR against their fork): `gh pr list --repo cntrl-alt-lenny/xenoblade
+  --state open`.
+
+`gh pr list` with no `--repo` defaults to whichever remote the current
+branch is tracking, which can surprise you — always be explicit when
+checking PR state.
+
+### Brain's merge command, fork-aware
+
+Brain merges by approving + merging the upstream PR after
+cntrl_alt_lenny's OK:
+
+```sh
+gh pr merge <N> --repo xbret/xenoblade --squash --delete-branch
+```
+
+`--delete-branch` removes the branch on the fork side as part of the
+merge — saves a separate `git push fork --delete` step.
+
 ## PR conventions
 
 - **Branch names:** `decomper/<kebab-scope>` for matches,
@@ -215,3 +277,8 @@ and let brain merge.
   decomper. Smallest unmatched kyoshin/plugin TU (4 fns, 356 bytes
   `.text`). First decomper brief; matched plugin/ siblings nearby for
   templates.
+- [`002-cloud-progress-and-targets`](docs/briefs/002-cloud-progress-and-targets.md) —
+  cloud. Two no-baserom-needed tools: a static match counter that
+  reads `configure.py` directly, and a next-targets picker that
+  surfaces small unmatched TUs next to matched siblings. First cloud
+  brief.
