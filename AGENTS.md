@@ -211,5 +211,7 @@ and let brain merge.
 
 ## Open briefs
 
-None yet. Brain will populate this section as it scopes work in
-`docs/briefs/NNN-<slug>.md`.
+- [`001-kyoshin-ocBuiltin`](docs/briefs/001-kyoshin-ocBuiltin.md) —
+  decomper. Smallest unmatched kyoshin/plugin TU (4 fns, 356 bytes
+  `.text`). First decomper brief; matched plugin/ siblings nearby for
+  templates.
