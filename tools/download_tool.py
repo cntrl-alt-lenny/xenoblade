@@ -126,26 +126,32 @@ def main() -> None:
     output = Path(args.output)
 
     print(f"Downloading {url} to {output}")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    try:
-        with urllib.request.urlopen(req) as response:
-            download(url, response, output)
-    except urllib.error.URLError as e:
-        if str(e).find("CERTIFICATE_VERIFY_FAILED") == -1:
-            raise e
-        try:
-            import certifi
-            import ssl
-        except ImportError:
-            print(
-                '"certifi" module not found. Please install it using "python -m pip install certifi".'
-            )
-            return
 
-        with urllib.request.urlopen(
-            req, context=ssl.create_default_context(cafile=certifi.where())
-        ) as response:
-            download(url, response, output)
+    # Local-cache fallback for files.decomp.dev, which stalls mid-transfer on
+    # this network for both urllib and curl. Browser-download the file to
+    # ~/Downloads/ and we'll pick it up here on rebuild.
+    local_cache = Path.home() / "Downloads" / Path(url).name
+    if local_cache.exists() and local_cache.stat().st_size > 0:
+        print(f"Using local cache: {local_cache}")
+        with open(local_cache, "rb") as f:
+            download(url, f, output)
+        return
+
+    # Prefer curl over urllib — urllib + Cloudflare hangs in this environment.
+    import subprocess
+    import tempfile
+    tmp_path = tempfile.mktemp()
+    try:
+        subprocess.run(
+            ["curl", "-fL", "--max-time", "300", "--silent", "--show-error",
+             "-o", tmp_path, "-H", "User-Agent: Mozilla/5.0", url],
+            check=True,
+        )
+        with open(tmp_path, "rb") as f:
+            download(url, f, output)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 if __name__ == "__main__":
