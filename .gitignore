@@ -16,6 +16,12 @@ orig/*/*
 *.o
 *.map
 *.MAP
+*.rvz
+*.iso
+*.wbfs
+*.gcm
+*.wia
+*.ciso
 
 # Build files
 build/
