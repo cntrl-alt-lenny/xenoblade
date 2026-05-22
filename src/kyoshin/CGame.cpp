@@ -24,7 +24,11 @@ CGame* CGame::spInstance;
 static FixStr<64> lbl_80573C80;
 nw4r::lyt::Layout* CGame::lbl_80666604;
 nw4r::lyt::ArcResourceAccessor* CGame::sArcResourceAccessor;
+#if defined(VERSION_JP)
 const char* CGame::scViewName = "巨神"; //"Bionis"
+#else
+const char* CGame::scViewName = "XENOBLADE";
+#endif
 CGameRestart* CGameRestart::spInstance;
 
 CGame::CGame(const char* pName, CWorkThread* pParent) :
@@ -42,6 +46,14 @@ unk228(0) {
     CLibHbm::func_8045D5C8(1);
     CWorkSystem::setExitFunc(&onExit);
     this->wkSetEvent(EVT_4);
+#if !defined(VERSION_JP)
+    // The PAL-format query is in the baserom but its result is unused; mwcc
+    // keeps the call because it can't prove the function is side-effect-free.
+    // Likely a dead "if (isPAL) margin = 0x39 else margin = 0x39" the
+    // developer simplified at the constant level but left the branch in.
+    CDeviceVI::isTvFormatPal();
+    mLetterboxMargin = 0x39;
+#endif
 }
 
 CGame::~CGame(){
@@ -128,8 +140,15 @@ void CGame::wkRender(){
 void CGame::func_800395F4(bool wide){
     if(spInstance != nullptr && spInstance->mView != nullptr){
         if(!wide){
+#if defined(VERSION_JP)
             setViewRect(spInstance->mView, 0, 56,
             CDeviceVI::getRenderModeObj()->fbWidth, CDeviceVI::getRenderModeObj()->efbHeight - 114);
+#else
+            setViewRect(spInstance->mView, 0,
+            spInstance->mLetterboxMargin - 1,
+            CDeviceVI::getRenderModeObj()->fbWidth,
+            CDeviceVI::getRenderModeObj()->efbHeight - 2 * spInstance->mLetterboxMargin);
+#endif
         }else{
             setViewRect(spInstance->mView, 0, 0,
             CDeviceVI::getRenderModeObj()->fbWidth, CDeviceVI::getRenderModeObj()->efbHeight);
@@ -161,8 +180,15 @@ bool CGame::wkStandbyLogin(){
         setViewRect(mView, 0, 0,
         CDeviceVI::getRenderModeObj()->fbWidth, CDeviceVI::getRenderModeObj()->efbHeight);
     }else{
+#if defined(VERSION_JP)
         setViewRect(mView, 0, 56,
         CDeviceVI::getRenderModeObj()->fbWidth, CDeviceVI::getRenderModeObj()->efbHeight - 114);
+#else
+        setViewRect(mView, 0,
+        mLetterboxMargin - 1,
+        CDeviceVI::getRenderModeObj()->fbWidth,
+        CDeviceVI::getRenderModeObj()->efbHeight - 2 * mLetterboxMargin);
+#endif
     }
 
     StaticDataHandle handle;

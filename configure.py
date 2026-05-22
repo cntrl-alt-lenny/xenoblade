@@ -425,7 +425,7 @@ config.libs = [
         "cflags": cflags_game,
         "progress_category": "game",
         "objects": [
-            Object(MatchingFor("jp"), "kyoshin/CGame.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
+            Object(Matching, "kyoshin/CGame.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
             Object(MatchingFor("jp"), "kyoshin/main.cpp"),
             Object(Matching, "kyoshin/plugin/pluginDeb.cpp"),
             Object(Matching, "kyoshin/plugin/pluginWait.cpp"),
