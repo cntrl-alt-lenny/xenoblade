@@ -53,6 +53,18 @@ public:
     int unk228;
     u32 unk22C;
 
+#if !defined(VERSION_JP)
+    // EU/US: stores a letterbox-margin nominal used in setViewRect.
+    // Top margin = mLetterboxMargin - 1, bottom margin = mLetterboxMargin + 1,
+    // so 4:3 viewport reduction = 2 * mLetterboxMargin (matches JP's hardcoded
+    // 56 / 114 with mLetterboxMargin = 57). Constructor inits to 0x39.
+    u16 mLetterboxMargin; //0x230
+    // 6 trailing bytes bring sizeof(CGame) to 0x238 in US/EU; the asm in
+    // CGame.s never reads them but the allocator-size constant requires them.
+    u16 unk232;           //0x232
+    u32 unk234;           //0x234
+#endif
+
 private:
     static const int MAX_CHILD = 8;
 
