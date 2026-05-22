@@ -30,14 +30,15 @@ main.dol passes the SHA-1 gate with the TU's Object entry flipped to
 
 ## Hands-off paths
 
-- `tools/`, `libs/`, `include/` — cloud's territory
-- `configure.py` top-level structure / helpers — cloud's territory.
-  You touch the Object table only.
+- `tools/`, `libs/`, `include/` — scaffolder's territory
+- `configure.py` top-level structure / helpers — scaffolder's
+  territory. You touch the Object table only.
 - `AGENTS.md`, `CLAUDE.md`, `docs/state.md` — brain's territory
 
 If a task needs a change in someone else's lane (e.g. a missing
 SDK header is blocking you), flag it to cntrl_alt_lenny / brain so
-they can scope a cloud brief rather than editing tools/libs yourself.
+they can scope a scaffolder brief rather than editing tools/libs
+yourself.
 
 ## The matching loop
 

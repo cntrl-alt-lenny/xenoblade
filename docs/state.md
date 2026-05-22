@@ -21,7 +21,7 @@ If you're a fresh `brain` session, read this *and*
 - **Open PRs upstream (`xbret/xenoblade`):** none.
 - **Open briefs:** 1 (decomper / kyoshin-ocBuiltin — first match brief).
 - **Live agents this week:** brain (this session), decomper (not yet
-  started), cloud (not yet started).
+  started), scaffolder (not yet started — formerly named `cloud`).
 
 `python3 configure.py progress` only works *after* a successful `ninja`
 build — it reads `build/<ver>/report.json`. If you see "Report file
@@ -41,7 +41,7 @@ build/jp/report.json does not exist", run `ninja` once first.
 - **Blocks:** nothing. Picked precisely because surrounding plugin/
   siblings are already matched (templates next door).
 
-### [`002-cloud-progress-and-targets`](briefs/002-cloud-progress-and-targets.md) — cloud
+### [`002-scaffolder-progress-and-targets`](briefs/002-scaffolder-progress-and-targets.md) — scaffolder
 
 - **Status:** drafted, not yet picked up.
 - **Goal:** two small, no-baserom-needed tools — (a) a self-contained
@@ -49,9 +49,12 @@ build/jp/report.json does not exist", run `ninja` once first.
   directly and prints per-module match counts (works without
   `report.json`), and (b) a `tools/next_targets.py` that picks the
   smallest unmatched TUs sitting next to matched siblings.
-- **Branch (when started):** `cloud/progress-and-targets`.
+- **Branch (when started):** `scaffolder/progress-and-targets`.
 - **Blocks:** nothing. Both tools are pure-Python over `configure.py`
-  + `config/<ver>/symbols.txt`; cloud doesn't need a built ROM.
+  + `config/<ver>/symbols.txt`; scaffolder doesn't need a built ROM.
+- **Note:** brief 002 was originally filed as `cloud/...` before the
+  cloud → scaffolder rename. File and branch use the new slug; brief
+  number is unchanged.
 
 ## Repository layout reminders
 
@@ -87,7 +90,7 @@ When the next brain session picks up:
 4. **Check brief 001 status**: has decomper opened a PR for
    `kyoshin/plugin/ocBuiltin.cpp` yet? If yes, review it; if no, no
    action — it's their queue, not yours.
-5. **Check brief 002 status**: has cloud opened a PR for
+5. **Check brief 002 status**: has scaffolder opened a PR for
    `tools/match_stats.py` + `tools/next_targets.py`? Same review-or-
    wait logic.
 6. **After any merge:** update this file's *Match progress* counts
@@ -101,4 +104,14 @@ When the next brain session picks up:
   fallback, and the first decomper brief (001-kyoshin-ocBuiltin).
   No matches yet from this brain session — that's decomper's turn.
 - **2026-05-21** — `docs/state.md` created (this file). Fork/origin
-  workflow section added to `AGENTS.md`. Cloud brief 002 drafted.
+  workflow section added to `AGENTS.md`. Scaffolder brief 002
+  drafted (originally as `002-cloud-…`; renamed in the same wave
+  as the role rename below).
+- **2026-05-21** — Cloud agent renamed to **scaffolder** on branch
+  `brain/rename-cloud-to-scaffolder`. The prior slug implied where
+  the agent runs; the new slug names what it does (scaffolds tools,
+  libs, CI, research). Parallel with `decomper` (both `-er` names).
+  In-repo spec updated; sibling worktree filesystem rename is a
+  separate follow-up cntrl_alt_lenny will run with `git worktree
+  move`. Historical PRs / branches on the `cloud/` prefix remain
+  valid in git history.

@@ -1,15 +1,19 @@
-### cloud/progress-and-targets
+### scaffolder/progress-and-targets
 
 **Goal:** Two small, self-contained Python tools under `tools/` that
 work *without* a successful baserom build. Both are useful from day
 one and don't depend on the mwcc toolchain, `dtk`, or
 `build/<ver>/report.json`.
 
-This is cloud's **first brief**. Picked because it's pure-Python over
-[`configure.py`](../../configure.py)'s Object table — cloud can
-write, test, and self-verify it without running `ninja`, which is
-exactly the role's constraint (see
-[`AGENTS.md § Cloud`](../../AGENTS.md)).
+This is scaffolder's **first brief**. Picked because it's pure-Python
+over [`configure.py`](../../configure.py)'s Object table —
+scaffolder can write, test, and self-verify it without running
+`ninja`, which is exactly the role's constraint (see
+[`AGENTS.md`](../../AGENTS.md) and
+[`.claude/agents/scaffolder.md`](../../.claude/agents/scaffolder.md)).
+
+> File originally drafted as `002-cloud-progress-and-targets.md`
+> before the cloud → scaffolder rename. Brief number preserved.
 
 ## Scope
 
@@ -106,8 +110,9 @@ A heuristic picker that surfaces promising unmatched TUs.
 - [ ] `tools/next_targets.py` exists, runs cleanly, exits 0.
 - [ ] Both scripts run end-to-end on `cntrl-alt-lenny`'s clone
       *without* needing `compilers/`, `orig/`, or `build/` to be
-      populated. (Cloud cannot verify this from a cloud session —
-      brain will verify on the local machine during PR review.)
+      populated. (Scaffolder cannot verify this from a web LLM
+      session — brain will verify on the local machine during PR
+      review.)
 - [ ] Both scripts have a `--json` mode that round-trips through
       `json.loads` cleanly.
 - [ ] `tools/match_stats.py` agrees with the day-1 counts in
@@ -118,9 +123,9 @@ A heuristic picker that surfaces promising unmatched TUs.
       surface unless explicitly briefed.
 - [ ] Code is `ruff`-clean: `python3 -m ruff check tools/`.
 
-## What cloud verifies vs. what brain verifies
+## What scaffolder verifies vs. what brain verifies
 
-Cloud verifies (no baserom needed):
+Scaffolder verifies (no baserom needed):
 
 - `python3 tools/match_stats.py` runs and prints sensible numbers.
 - `python3 tools/next_targets.py` runs and prints a ranked list.
@@ -139,7 +144,7 @@ Brain verifies on the local machine after the PR lands:
 
 ## PR
 
-- **Branch:** `cloud/progress-and-targets`
+- **Branch:** `scaffolder/progress-and-targets`
 - **Push to:** `fork` remote (`cntrl-alt-lenny/xenoblade`), not
   `origin`. See [`AGENTS.md § PRs and the fork remote`](../../AGENTS.md#prs-and-the-fork-remote).
 - **PR title:** "tools: match_stats.py + next_targets.py" or similar.
@@ -155,7 +160,7 @@ Brain verifies on the local machine after the PR lands:
   - **Scope** — one line: `tools/` only, no `src/`, no `configure.py`
     Object table changes.
 
-## Notes for the cloud session
+## Notes for the scaffolder session
 
 - `configure.py` is large (~100KB). Don't try to read the whole file
   in one go to RAM for parsing — `ast.parse` on a Path is fine, or

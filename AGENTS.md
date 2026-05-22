@@ -15,7 +15,7 @@ agent in plain English — see *Adding or retiring agents* near the bottom.
 |-------------------|-------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|---------------------------------------------------------------------------------|
 | **cntrl_alt_lenny** | meatspace                                                                                 | Human project owner. Sets priorities, picks direction, merges PRs, adds/retires agents, final authority.                                                                              | —                                                              | —                                                                               |
 | **brain**         | Any LLM session (Claude Code, Codex CLI, …) on cntrl_alt_lenny's PC or Mac, with toolchain + baserom | **Coordinator.** Runs `ninja` locally to verify PRs, maintains this file + `docs/state.md`, writes task briefs, reviews incoming PRs, decides the next task. **Default on every PR: review locally → summarize in plain English to cntrl_alt_lenny → offer to merge → execute on OK.** Self-merges autonomously when cntrl_alt_lenny is AFK, flagging in the PR body. | `AGENTS.md`, `CLAUDE.md`, `docs/briefs/`, `docs/state.md`      | `src/`, `tools/`, `libs/`, `include/`, `config/<ver>/symbols.txt`, `configure.py` Object table |
-| **cloud**         | Any LLM session without local toolchain access (Claude web, Codex web, …) — OR local without baserom | **Scaffolder & reviewer.** Writes tools, library headers, surveys, research; reviews PRs via GitHub MCP integrations. Cannot run local builds, so delegates verification to brain.     | `tools/`, `libs/` (header expansion), `include/`               | `src/`, `config/<ver>/symbols.txt`, `configure.py` Object table, `AGENTS.md` (proposes via PR; brain merges) |
+| **scaffolder**    | Any LLM session without local toolchain access (Claude web, Codex web, …) — OR local without baserom | **Scaffolder & reviewer.** Writes tools, library headers, surveys, research; reviews PRs via GitHub MCP integrations. Cannot run local builds, so delegates verification to brain. (Formerly `cloud`; renamed for role clarity — `-er` parallel with `decomper`. Historical PRs / branches retain the `cloud/` prefix.) | `tools/`, `libs/` (header expansion), `include/`               | `src/`, `config/<ver>/symbols.txt`, `configure.py` Object table, `AGENTS.md` (proposes via PR; brain merges) |
 | **decomper**      | Any LLM session on cntrl_alt_lenny's PC or Mac, with toolchain + baserom (separate session from brain) | Primary decomper. Matches individual TUs against the baserom, writes C/C++ source, flips `Object(NonMatching, ...)` to `Object(Matching, ...)` in `configure.py` as functions match. Renames placeholder symbols in `config/<ver>/symbols.txt`. | `src/`, `config/<ver>/symbols.txt`, `configure.py` Object entries (status + extra_cflags + mw_version per-TU only) | `tools/`, `libs/`, `include/`, `AGENTS.md`, top-level `configure.py` structure  |
 
 Extend this table when a new agent joins; see *Adding or retiring
@@ -28,7 +28,7 @@ files under `.claude/agents/`:
 
 - [`.claude/agents/brain.md`](.claude/agents/brain.md) — coordinator
 - [`.claude/agents/decomper.md`](.claude/agents/decomper.md) — function matcher
-- [`.claude/agents/cloud.md`](.claude/agents/cloud.md) — scaffolder
+- [`.claude/agents/scaffolder.md`](.claude/agents/scaffolder.md) — scaffolder (formerly `cloud.md`)
 
 Each file captures the role's scope + hands-off paths + workflow loop
 so a fresh Claude Code session can load the appropriate subagent
@@ -38,15 +38,15 @@ AGENTS.md cold. The subagent specs are derived from this file — if
 you change the owns/hands-off columns here, update the matching
 `.claude/agents/*.md` too (and vice versa).
 
-### Why the brain runs locally (PC or Mac), not on a cloud session
+### Why the brain runs locally (PC or Mac), not in a web LLM session
 
 The brain needs to actually execute `ninja`, `python configure.py
 progress`, etc. to verify that incoming PRs don't regress the build.
-Web/cloud LLM sessions don't have the baserom or the toolchain, so
-they can *design* work and *review diffs* but can't *prove the
-build still matches*. Putting the brain on a local machine means
-one session can both decide and verify, which is the difference
-between coordinating and guessing.
+Web LLM sessions (Claude web, Codex web, …) don't have the baserom
+or the toolchain, so they can *design* work and *review diffs* but
+can't *prove the build still matches*. Putting the brain on a local
+machine means one session can both decide and verify, which is the
+difference between coordinating and guessing.
 
 ### Slugs are roles, not LLM providers
 
@@ -106,30 +106,38 @@ write briefs for cntrl_alt_lenny to paste to other agents, repeat.
 
 ### Worktree convention (multi-agent on the same machine)
 
-When `brain`, `decomper`, and `cloud` are running on the same physical
-machine (the common case for cntrl_alt_lenny's setup), **they must
-work in separate git worktrees** so they don't fight over branch
-state in the same working directory. Two equivalent mechanisms exist;
-either is fine — pick by host:
+When `brain`, `decomper`, and `scaffolder` are running on the same
+physical machine (the common case for cntrl_alt_lenny's setup),
+**they must work in separate git worktrees** so they don't fight
+over branch state in the same working directory. Two equivalent
+mechanisms exist; either is fine — pick by host:
 
 #### Mechanism A — manual sibling worktrees (Mac convention)
 
 Standard layout, three sibling directories at the same depth:
 
-| Worktree path                          | Slug      | Purpose                                                                                                  |
-|----------------------------------------|-----------|----------------------------------------------------------------------------------------------------------|
-| `~/Dev/xenoblade`                      | `brain`   | Main repo. Brain pulls main, reviews PRs, runs build verifications here.                                |
-| `~/Dev/xenoblade-decomper`             | `decomper`| Sibling worktree. Decomper checks out its own `decomper/<scope>` branches without touching brain's working state. |
-| `~/Dev/xenoblade-cloud`                | `cloud`   | Sibling worktree. Cloud checks out its own `cloud/<scope>` branches the same way.                       |
+| Worktree path                          | Slug         | Purpose                                                                                                  |
+|----------------------------------------|--------------|----------------------------------------------------------------------------------------------------------|
+| `~/Dev/xenoblade`                      | `brain`      | Main repo. Brain pulls main, reviews PRs, runs build verifications here.                                |
+| `~/Dev/xenoblade-decomper`             | `decomper`   | Sibling worktree. Decomper checks out its own `decomper/<scope>` branches without touching brain's working state. |
+| `~/Dev/xenoblade-scaffolder`           | `scaffolder` | Sibling worktree. Scaffolder checks out its own `scaffolder/<scope>` branches the same way.             |
 
 Add the sibling worktrees once per machine:
 
 ```sh
 git worktree add --detach ~/Dev/xenoblade-decomper
-git worktree add --detach ~/Dev/xenoblade-cloud
-cp -r ~/Dev/xenoblade/orig/jp/* ~/Dev/xenoblade-decomper/orig/jp/  # after Dolphin extract
-cp -r ~/Dev/xenoblade/orig/jp/* ~/Dev/xenoblade-cloud/orig/jp/
+git worktree add --detach ~/Dev/xenoblade-scaffolder
+cp -r ~/Dev/xenoblade/orig/jp/* ~/Dev/xenoblade-decomper/orig/jp/    # after Dolphin extract
+cp -r ~/Dev/xenoblade/orig/jp/* ~/Dev/xenoblade-scaffolder/orig/jp/
 ```
+
+> Historical note: the `scaffolder` slug was renamed from `cloud` in
+> `brain/rename-cloud-to-scaffolder`. On machines where the on-disk
+> worktree is still named `xenoblade-cloud`, finish the transition
+> with `git worktree move ~/Dev/xenoblade-cloud
+> ~/Dev/xenoblade-scaffolder` once no `cloud/*` branches are checked
+> out there. Historical branches on the `cloud/` prefix remain valid
+> in git history.
 
 Each worktree gets its own copy of the gitignored extracted files
 under `orig/<region>/`, and its own `build/` directory. The `.git`
@@ -151,7 +159,7 @@ Claude Code on Windows (or anywhere) automatically creates a
 per-session sandbox worktree inside `.claude/worktrees/<auto-name>/`
 each time an agent session is launched. These provide identical
 isolation to the manual sibling worktrees above — decomper and
-cloud each get their own checkout of their working branch,
+scaffolder each get their own checkout of their working branch,
 independent of brain's main working state. No manual `git worktree
 add` needed.
 
@@ -162,7 +170,7 @@ convention:
 - **Windows:** Mechanism B (Claude Code automatic sandbox worktrees).
 
 Brain does not strictly need either mechanism for review/merge work
-on its own — both mechanisms only matter when decomper and cloud
+on its own — both mechanisms only matter when decomper and scaffolder
 run in parallel.
 
 ## PRs and the fork remote
@@ -190,7 +198,7 @@ git remote add fork https://github.com/cntrl-alt-lenny/xenoblade.git
 
 1. Branch off `origin/main`:
    `git checkout -b decomper/<scope> origin/main`
-   (or `cloud/<scope>` / `brain/<scope>`).
+   (or `scaffolder/<scope>` / `brain/<scope>`).
 2. Commit work locally.
 3. Push to the **fork**, not origin:
    `git push -u fork decomper/<scope>`.
@@ -230,8 +238,10 @@ merge — saves a separate `git push fork --delete` step.
 ## PR conventions
 
 - **Branch names:** `decomper/<kebab-scope>` for matches,
-  `cloud/<kebab-scope>` for tools/libs/docs, `brain/<kebab-scope>`
-  for coordination updates.
+  `scaffolder/<kebab-scope>` for tools/libs/docs, `brain/<kebab-scope>`
+  for coordination updates. Older branches in history use the
+  pre-rename `cloud/<scope>` prefix; those are grandfathered and
+  remain valid in git.
 - **One concern per PR**: one match or coherent wave of sibling
   matches; one tool or one focused tool set; one coordination
   update.
@@ -241,12 +251,13 @@ merge — saves a separate `git push fork --delete` step.
   - Confirmation that `ninja` still passes the SHA-1 gate for every
     region the change touches.
   - Match progress delta: before/after counts.
-- **Cloud PR body** must include:
-  - Test plan section: what cloud verified locally (unit tests,
-    ruff, smoke tests against `config/`), and explicit list of what
-    brain needs to verify with a local build.
-- **Brain reviews → cntrl_alt_lenny → merges.** Decomper and cloud
-  never self-merge except in a production fire (see below).
+- **Scaffolder PR body** must include:
+  - Test plan section: what scaffolder verified locally (unit
+    tests, ruff, smoke tests against `config/`), and explicit list
+    of what brain needs to verify with a local build.
+- **Brain reviews → cntrl_alt_lenny → merges.** Decomper and
+  scaffolder never self-merge except in a production fire (see
+  below).
 
 ## Production-fire spot authority
 
@@ -259,8 +270,9 @@ with the urgency rationale.
 ## Adding or retiring agents
 
 cntrl_alt_lenny adds or retires agents by telling the **brain** in
-plain English ("add a permuter agent that does X", "retire cloud,
-we're folding its scope into decomper"). The brain then:
+plain English ("add a permuter agent that does X", "retire
+scaffolder, we're folding its scope into decomper"). The brain
+then:
 
 1. Edits the *Active agents* table above.
 2. Edits the matching `.claude/agents/*.md` subagent file (or adds
@@ -268,8 +280,8 @@ we're folding its scope into decomper"). The brain then:
 3. Updates `docs/state.md` to note the change.
 4. Commits + opens a PR. cntrl_alt_lenny reviews and merges.
 
-Never edit AGENTS.md directly as decomper or cloud — propose via PR
-and let brain merge.
+Never edit AGENTS.md directly as decomper or scaffolder — propose
+via PR and let brain merge.
 
 ## Open briefs
 
@@ -277,8 +289,8 @@ and let brain merge.
   decomper. Smallest unmatched kyoshin/plugin TU (4 fns, 356 bytes
   `.text`). First decomper brief; matched plugin/ siblings nearby for
   templates.
-- [`002-cloud-progress-and-targets`](docs/briefs/002-cloud-progress-and-targets.md) —
-  cloud. Two no-baserom-needed tools: a static match counter that
-  reads `configure.py` directly, and a next-targets picker that
-  surfaces small unmatched TUs next to matched siblings. First cloud
-  brief.
+- [`002-scaffolder-progress-and-targets`](docs/briefs/002-scaffolder-progress-and-targets.md) —
+  scaffolder. Two no-baserom-needed tools: a static match counter
+  that reads `configure.py` directly, and a next-targets picker
+  that surfaces small unmatched TUs next to matched siblings. First
+  scaffolder brief.

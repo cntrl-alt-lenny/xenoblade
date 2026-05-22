@@ -27,7 +27,7 @@ already matched (drafting templates available right next door).
 ## Non-scope
 
 - Anything in `tools/`, `libs/`, `include/`, or `configure.py`'s
-  top-level structure — that's cloud's territory.
+  top-level structure — that's scaffolder's territory.
 - Sibling unmatched plugin TUs (`ocThread.cpp`, `ocMsg.cpp`,
   `ocBdat.cpp`, `ocUnit.cpp`, `ocCfp.cpp`, etc.) — follow-up briefs.
 - JP / EU regions — match US only. Brain will scope the multi-region
