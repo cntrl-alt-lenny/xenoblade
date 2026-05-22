@@ -438,7 +438,7 @@ config.libs = [
             Object(NonMatching, "kyoshin/cf/CTaskGameCf.cpp", extra_cflags=["-O4,s"]),
             Object(NonMatching, "kyoshin/CTaskGameEff.cpp"),
             Object(NonMatching, "kyoshin/plugin/ocCfp.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/plugin/pluginMain.cpp"),
+            Object(Matching, "kyoshin/plugin/pluginMain.cpp"),
             Object(NonMatching, "kyoshin/plugin/pluginUi.cpp"),
             Object(NonMatching, "kyoshin/plugin/pluginEve.cpp"),
             Object(NonMatching, "kyoshin/plugin/pluginCfs.cpp"),
