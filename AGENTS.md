@@ -288,9 +288,8 @@ via PR and let brain merge.
 - [`001-kyoshin-ocBuiltin`](docs/briefs/001-kyoshin-ocBuiltin.md) —
   decomper. Smallest unmatched kyoshin/plugin TU (4 fns, 356 bytes
   `.text`). First decomper brief; matched plugin/ siblings nearby for
-  templates.
-- [`002-scaffolder-progress-and-targets`](docs/briefs/002-scaffolder-progress-and-targets.md) —
-  scaffolder. Two no-baserom-needed tools: a static match counter
-  that reads `configure.py` directly, and a next-targets picker
-  that surfaces small unmatched TUs next to matched siblings. First
-  scaffolder brief.
+  templates. **Still untouched after first cycle — re-kicked
+  2026-05-22.**
+
+Brief 002 (scaffolder analyzer tools) landed 2026-05-22 in commit
+`44a4b9a` — see [`docs/state.md`](docs/state.md) activity log.

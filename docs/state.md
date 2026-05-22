@@ -9,19 +9,24 @@ If you're a fresh `brain` session, read this *and*
 
 ## At-a-glance
 
-- **Date of last update:** 2026-05-21
+- **Date of last update:** 2026-05-22
 - **Primary target region:** JP (`a564033aee46988743d8f5e6fdc50a8c65791160`)
-- **Match progress (from `configure.py` Object table):**
-  - `Matching` (all regions): **217 TUs**
+- **Match progress (from `python3 tools/match_stats.py`):**
+  - `Matching` (all regions): **218 TUs**
   - `MatchingFor("jp")`: **115 TUs**
   - `NonMatching`: **833 TUs**
-  - **Total matched any region: 332 / 1165 (~28%)**
+  - **Total matched any region: 333 / 1166 (~28.6%)**
   - No `MatchingFor("eu")` or `MatchingFor("us")` yet — every region-
     specific match so far is JP-only.
 - **Open PRs upstream (`xbret/xenoblade`):** none.
-- **Open briefs:** 1 (decomper / kyoshin-ocBuiltin — first match brief).
-- **Live agents this week:** brain (this session), decomper (not yet
-  started), scaffolder (not yet started — formerly named `cloud`).
+- **Open PRs on fork (`cntrl-alt-lenny/xenoblade`):** none — both day-1
+  PRs merged into fork main today.
+- **Fork main vs upstream main:** fork is **1 commit ahead** of
+  `xbret/main` (consolidated commit `44a4b9a`). Upstream cascade
+  pending — opening an upstream PR is cntrl_alt_lenny's call.
+- **Open briefs:** 1 (decomper / kyoshin-ocBuiltin — still untouched).
+- **Live agents this week:** brain (this session), scaffolder (delivered
+  brief 002), decomper (no work yet — needs a re-kick).
 
 `python3 configure.py progress` only works *after* a successful `ninja`
 build — it reads `build/<ver>/report.json`. If you see "Report file
@@ -31,30 +36,18 @@ build/jp/report.json does not exist", run `ninja` once first.
 
 ### [`001-kyoshin-ocBuiltin`](briefs/001-kyoshin-ocBuiltin.md) — decomper
 
-- **Status:** drafted, not yet picked up.
+- **Status:** still untouched. Decomper did not start in the first
+  cycle — brain re-kicked today (2026-05-22).
 - **Goal:** match `kyoshin/plugin/ocBuiltin.cpp` against the US baserom,
   flip its Object entry to `MatchingFor("us")`. Project's first
   region-specific match outside JP.
 - **Size:** 4 functions / 356 bytes `.text`. Smallest unmatched TU in
-  `kyoshin/plugin/`.
+  `kyoshin/plugin/` (confirmed by today's `next_targets.py` run —
+  ranks #3 in the `kyoshin/plugin` scope behind `pluginTime.cpp` and
+  `pluginHelp.cpp`, both even smaller).
 - **Branch (when started):** `decomper/kyoshin-ocBuiltin`.
 - **Blocks:** nothing. Picked precisely because surrounding plugin/
   siblings are already matched (templates next door).
-
-### [`002-scaffolder-progress-and-targets`](briefs/002-scaffolder-progress-and-targets.md) — scaffolder
-
-- **Status:** drafted, not yet picked up.
-- **Goal:** two small, no-baserom-needed tools — (a) a self-contained
-  `tools/match_stats.py` that reads `configure.py`'s Object table
-  directly and prints per-module match counts (works without
-  `report.json`), and (b) a `tools/next_targets.py` that picks the
-  smallest unmatched TUs sitting next to matched siblings.
-- **Branch (when started):** `scaffolder/progress-and-targets`.
-- **Blocks:** nothing. Both tools are pure-Python over `configure.py`
-  + `config/<ver>/symbols.txt`; scaffolder doesn't need a built ROM.
-- **Note:** brief 002 was originally filed as `cloud/...` before the
-  cloud → scaffolder rename. File and branch use the new slug; brief
-  number is unchanged.
 
 ## Repository layout reminders
 
@@ -83,30 +76,54 @@ When the next brain session picks up:
    --state open`. If anything is open, that's the highest-priority
    review work.
 2. **Check the user's fork**: `gh pr list --repo cntrl-alt-lenny/xenoblade
-   --state open` (in case there's a draft against the fork itself).
-3. **Confirm the build baseline**: from a clean `build/` if you can
-   afford the rebuild time, `rm -rf build && python3 configure.py &&
-   ninja`. Green = baseline holds.
+   --state open`. After the first cycle, the expectation is **one PR
+   per active agent** (decomper for brief 001, scaffolder for whatever
+   brief they're working).
+3. **Confirm the build baseline**: this brain machine only has the
+   **US** baserom extracted (`orig/us/sys/main.dol`); `orig/jp/` is
+   empty. Run `python3 configure.py --version us && ninja` to verify
+   `build/us/main.dol: OK` against the SHA-1 gate. If/when the user
+   extracts JP, switch primary verification to JP.
 4. **Check brief 001 status**: has decomper opened a PR for
-   `kyoshin/plugin/ocBuiltin.cpp` yet? If yes, review it; if no, no
-   action — it's their queue, not yours.
-5. **Check brief 002 status**: has scaffolder opened a PR for
-   `tools/match_stats.py` + `tools/next_targets.py`? Same review-or-
-   wait logic.
-6. **After any merge:** update this file's *Match progress* counts
-   and *Open briefs* list, then commit on `brain/<scope>`.
+   `kyoshin/plugin/ocBuiltin.cpp` yet? If yes, review it. If still no
+   (this is now the second cycle for brief 001), flag in the next
+   message that we may need to swap to a different decomper session
+   or simplify the brief.
+5. **After any merge:** re-run `python3 tools/match_stats.py` to
+   refresh the *Match progress* numbers in this file, log the merge
+   in the *Recent activity log*, and either commit straight to fork
+   main (routine bookkeeping) or open a `brain/<scope>` PR if the
+   change is substantive enough to want a review trail.
+6. **Upstream cascade decision** (currently pending — 1 commit ahead):
+   cntrl_alt_lenny can ask brain to open an upstream PR from
+   `cntrl-alt-lenny:main` → `xbret:main` to send merged fork work to
+   the project. Until that lands, fork main stays ahead of upstream.
 
 ## Recent activity log
 
+- **2026-05-22** — First review/merge cycle. Brain consolidated all of
+  day-1's scaffolding (multi-agent manifest, briefs 001+002,
+  `.gitignore` ROM patterns, `download_tool.py` curl fallback,
+  `cloud → scaffolder` rename) **plus** scaffolder's brief 002
+  deliverable (`tools/_object_table.py` + `tools/match_stats.py` +
+  `tools/next_targets.py`) into a single squash commit on fork main
+  (`44a4b9a`). Branch chain `brain/initial-setup` →
+  `brain/rename-cloud-to-scaffolder` → `scaffolder/progress-and-targets`
+  collapsed at merge time and deleted afterward. Verified ninja still
+  green on US build (`build/us/main.dol: OK`). Fork main is now
+  1 commit ahead of `origin/main` — upstream PR not yet opened.
+- **2026-05-22** — Discovered decomper had not started brief 001
+  (worktree on stale `decomper/initial-setup` with no work, no
+  branch on fork). Re-kicked decomper for next cycle. Worktree
+  detached to fork main and the stale branch deleted.
 - **2026-05-21** — Initial scaffold landed (`46ade67`,
   `7652286`, `d31723f`, `d968d0c`). Multi-agent coordination
   manifest, ROM-image gitignore patches, `download_tool.py` curl
   fallback, and the first decomper brief (001-kyoshin-ocBuiltin).
-  No matches yet from this brain session — that's decomper's turn.
-- **2026-05-21** — `docs/state.md` created (this file). Fork/origin
-  workflow section added to `AGENTS.md`. Scaffolder brief 002
-  drafted (originally as `002-cloud-…`; renamed in the same wave
-  as the role rename below).
+- **2026-05-21** — `docs/state.md` created. Fork/origin workflow
+  section added to `AGENTS.md`. Scaffolder brief 002 drafted
+  (originally as `002-cloud-…`; renamed in the same wave as the
+  role rename below).
 - **2026-05-21** — Cloud agent renamed to **scaffolder** on branch
   `brain/rename-cloud-to-scaffolder`. The prior slug implied where
   the agent runs; the new slug names what it does (scaffolds tools,
