@@ -428,7 +428,7 @@ config.libs = [
             Object(MatchingFor("jp"), "kyoshin/CGame.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
             Object(MatchingFor("jp"), "kyoshin/main.cpp"),
             Object(Matching, "kyoshin/plugin/pluginDeb.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/plugin/pluginWait.cpp"),
+            Object(Matching, "kyoshin/plugin/pluginWait.cpp"),
             Object(MatchingFor("us"), "kyoshin/plugin/ocBuiltin.cpp"),
             Object(NonMatching, "kyoshin/plugin/ocThread.cpp"),
             Object(NonMatching, "kyoshin/plugin/ocMsg.cpp"),
@@ -749,7 +749,7 @@ config.libs = [
             Object(NonMatching, "kyoshin/code_802B8A3C.cpp"),
             Object(MatchingFor("jp"), "kyoshin/plugin/pluginVoice.cpp"),
             Object(NonMatching, "kyoshin/code_802B9064.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/CBattery.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
+            Object(Matching, "kyoshin/CBattery.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
         ],
     },
     {
