@@ -712,7 +712,7 @@ config.libs = [
             Object(MatchingFor("jp"), "kyoshin/CNandData.cpp"),
             Object(MatchingFor("jp"), "kyoshin/ErrMesData.cpp", shift_jis = False, extra_cflags=["-enc UTF8"]), #JP only
             Object(NonMatching, "kyoshin/CErrMes.cpp"), #EU/US only
-            Object(NonMatching, "kyoshin/plugin/pluginHelp.cpp"),
+            Object(MatchingFor("us"), "kyoshin/plugin/pluginHelp.cpp"),
             Object(NonMatching, "kyoshin/cf/voice/cvsys/CVS_THREAD_BATTLE_MAIN.cpp"),
             Object(NonMatching, "kyoshin/cf/voice/cvsys/CVS_THREAD_BATTLE_BEGIN.cpp"),
             Object(NonMatching, "kyoshin/menu/CMenuGCItem.cpp"),
