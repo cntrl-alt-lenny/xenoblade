@@ -34,10 +34,10 @@ kyoshin/main.cpp:
 	.sdata2     start:0x80665AB8 end:0x80665B80
 
 split1.s:
-	.rodata     start:0x804FA440 end:0x805139D8
-	.data       start:0x80524BC8 end:0x8053B928
+	.rodata     start:0x804FA440 end:0x80513990
+	.data       start:0x80524BC8 end:0x8053B890
 	.bss        start:0x805704C8 end:0x80577790
-	.sdata      start:0x806618B0 end:0x80662F30
+	.sdata      start:0x806618B0 end:0x80662F28
 	.sbss       start:0x80663D10 end:0x80664C40
 	.sdata2     start:0x80665B90 end:0x80669020
 
@@ -1702,6 +1702,9 @@ kyoshin/CBattery.cpp:
 	extab       start:0x8001BF40 end:0x8001BF94
 	extabindex  start:0x80033CF4 end:0x80033D3C
 	.text       start:0x802BBC58 end:0x802BC028
+	.rodata     start:0x80513990 end:0x805139D8
+	.data       start:0x8053B890 end:0x8053B928
+	.sdata      start:0x80662F28 end:0x80662F30
 
 PowerPC_EABI_Support/src/Runtime/__mem.c:
 	.init       start:0x80004000 end:0x80004380
