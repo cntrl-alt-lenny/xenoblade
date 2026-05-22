@@ -427,7 +427,7 @@ config.libs = [
         "objects": [
             Object(MatchingFor("jp"), "kyoshin/CGame.cpp", extra_cflags=["-O4,s", "-func_align 4"]),
             Object(MatchingFor("jp"), "kyoshin/main.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/plugin/pluginDeb.cpp"),
+            Object(Matching, "kyoshin/plugin/pluginDeb.cpp"),
             Object(MatchingFor("jp"), "kyoshin/plugin/pluginWait.cpp"),
             Object(MatchingFor("us"), "kyoshin/plugin/ocBuiltin.cpp"),
             Object(NonMatching, "kyoshin/plugin/ocThread.cpp"),
