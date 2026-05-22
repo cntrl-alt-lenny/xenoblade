@@ -285,11 +285,18 @@ via PR and let brain merge.
 
 ## Open briefs
 
-- [`001-kyoshin-ocBuiltin`](docs/briefs/001-kyoshin-ocBuiltin.md) —
-  decomper. Smallest unmatched kyoshin/plugin TU (4 fns, 356 bytes
-  `.text`). First decomper brief; matched plugin/ siblings nearby for
-  templates. **Still untouched after first cycle — re-kicked
-  2026-05-22.**
+- [`004-retag-region-specific-matching`](docs/briefs/004-retag-region-specific-matching.md) —
+  decomper. Three single-line `configure.py` retags (assert.c,
+  encjapanese.c, encunicode.c) to align Object status with the
+  region scope splits.txt already enforces. **Queued, not kicked:**
+  success criteria need JP and EU baseroms to be extracted (currently
+  only US is set up on the active brain machine).
 
-Brief 002 (scaffolder analyzer tools) landed 2026-05-22 in commit
-`44a4b9a` — see [`docs/state.md`](docs/state.md) activity log.
+Landed briefs this run (see [`docs/state.md`](docs/state.md) activity
+log for commit SHAs):
+
+- Brief 002 (scaffolder analyzer tools) — `44a4b9a`, 2026-05-22 AM.
+- Brief 001 (decomper / kyoshin/plugin/ocBuiltin.cpp US match) —
+  `182e046`, 2026-05-22 PM. Project's first `MatchingFor("us")`.
+- Brief 003 (scaffolder / `match_stats --region` + `--cross-check`) —
+  `f46d0fc`, 2026-05-22 PM.
