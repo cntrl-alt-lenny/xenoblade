@@ -745,7 +745,7 @@ config.libs = [
             Object(NonMatching, "kyoshin/help/CHelp_ShopSel.cpp"),
             Object(NonMatching, "kyoshin/help/CHelp_Sp.cpp"),
             Object(NonMatching, "kyoshin/help/CHelp_Talk.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/help/CHelp_Target.cpp"),
+            Object(Matching, "kyoshin/help/CHelp_Target.cpp"),
             Object(NonMatching, "kyoshin/code_802B8A3C.cpp"),
             Object(MatchingFor("jp"), "kyoshin/plugin/pluginVoice.cpp"),
             Object(NonMatching, "kyoshin/code_802B9064.cpp"),
@@ -1479,7 +1479,7 @@ config.libs = [
     nw4rLib(
         "libnw4r_db",
         [
-            Object(MatchingFor("jp"), "nw4r/src/db/db_console.cpp"),
+            Object(Matching, "nw4r/src/db/db_console.cpp"),
             Object(MatchingFor("jp"), "nw4r/src/db/db_DbgPrintBase.cpp"),
             Object(MatchingFor("jp"), "nw4r/src/db/db_assert.cpp"),
         ],
@@ -1515,7 +1515,7 @@ config.libs = [
             Object(Matching, "nw4r/src/g3d/res/g3d_resanmcamera.cpp"),
             Object(NonMatching, "nw4r/src/g3d/res/g3d_resanmscn.cpp"),
             Object(NonMatching, "nw4r/src/g3d/g3d_transform.cpp"),
-            Object(MatchingFor("jp"), "nw4r/src/g3d/g3d_anmvis.cpp"),
+            Object(Matching, "nw4r/src/g3d/g3d_anmvis.cpp"),
             Object(NonMatching, "nw4r/src/g3d/g3d_anmclr.cpp"),
             Object(NonMatching, "nw4r/src/g3d/g3d_anmtexpat.cpp"),
             Object(NonMatching, "nw4r/src/g3d/g3d_anmtexsrt.cpp"),
