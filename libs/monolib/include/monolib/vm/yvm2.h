@@ -11,6 +11,7 @@ extern "C" {
 void vmInit();
 BOOL vmLink(u8* pData);
 BOOL vmPluginRegist(const char* name, PluginFuncData* plugin_funcs);
+void vmBuiltinOCRegist(OCData* pOC);
 void vmStart(u8* pData);
 
 VMThread* vmThreadCreate(SBHeader* pData, u32 r4);
