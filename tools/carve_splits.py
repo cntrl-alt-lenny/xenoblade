@@ -33,6 +33,19 @@ from one batch of TUs, applied to ``split1.s`` together).
 
 This is a precision tool — every byte matters for the SHA-1 gate. Run
 diffs by ``--apply``-less invocation, eyeball them, then apply.
+
+**Fragmentation gate (added during PR #12 cycle-6 iteration).** A carve
+batch is rejected if it would leave ``split1.s`` with more than one
+sub-range in any section. dtk treats ``split1.s`` as a single TU node
+in its link-order graph; if the catch-all is sliced into multiple
+sub-ranges with other TUs interleaved between them, the resulting
+ordering constraints can't be linearised and dtk fails with
+``Cyclic dependency encountered while resolving link order``. Only TUs
+whose data lives at the very start or very end of ``split1.s``'s range
+in every section they touch can be safely carved. The check runs after
+the slice is computed; bypass with ``--force`` only to inspect what a
+hypothetical multi-pseudo-unit split would produce (the diff stays
+unappliable).
 """
 
 from __future__ import annotations
@@ -378,6 +391,25 @@ def section_line(section: str, start: int, end: int) -> str:
     return f"\t{section:<11s} start:0x{start:08X} end:0x{end:08X}\n"
 
 
+def _split1_fragmentation(
+    split1_block: TuBlock, sections_touched: set[str]
+) -> dict[str, int]:
+    """Return ``{section -> sub_range_count}`` for any section with > 1 range.
+
+    A safe carve leaves split1.s with exactly one (or zero) sub-range per
+    section. More than one means the carved TUs interleave with split1.s
+    bytes — dtk treats split1.s as a single TU node and refuses to
+    topologically sort the link order when the order can't be linearised.
+    """
+
+    counts: dict[str, int] = {}
+    for section in sections_touched:
+        count = sum(1 for s in split1_block.sections if s.section == section)
+        if count > 1:
+            counts[section] = count
+    return counts
+
+
 def slice_split1_section(
     block: TuBlock, section: str, carve_ranges: list[CarveRange]
 ) -> None:
@@ -635,6 +667,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Bypass the fragmentation safety check. The diff will still be "
+            "emitted, but dtk will reject it with a cyclic-dependency "
+            "error. Use only when inspecting what a hypothetical multi-"
+            "pseudo-unit split would produce."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON describing the computed carves (in addition to the diff).",
@@ -699,6 +741,44 @@ def main(argv: list[str] | None = None) -> int:
     union_carves = [c for carves in per_tu_carves.values() for c in carves]
     for section in sorted(all_sections_touched):
         slice_split1_section(split1_block, section, union_carves)
+
+    # Cycle-risk gate: dtk's link-order graph treats split1.s as a single TU
+    # node. If carving leaves split1.s with multiple sub-ranges in any
+    # section, the catch-all has to be both BEFORE and AFTER any in-between
+    # TU at the same time, which dtk reports as a cyclic dependency on
+    # split.  Discovered during cycle 6 verification (PR #12 iteration);
+    # see the brief 012 followup notes in the PR body for the full trace.
+    fragmentation = _split1_fragmentation(split1_block, all_sections_touched)
+    if fragmentation:
+        msg_lines = ["fragmentation cycle risk after carve:"]
+        for section, count in fragmentation.items():
+            msg_lines.append(
+                f"  split1.s {section}: {count} sub-ranges (must be ≤ 1 to "
+                f"avoid dtk link-order cycle)"
+            )
+        msg_lines.append(
+            "Only carves that lie at the start or end of split1.s's existing "
+            "range in every touched section are safe. TUs whose data sits "
+            "in the middle of split1.s require either a sweep of every TU "
+            "between them and the boundary, or a multi-pseudo-unit split of "
+            "split1.s itself — both out of scope for this tool."
+        )
+        if not args.force:
+            for line in msg_lines:
+                print(f"error: {line}", file=sys.stderr)
+            print(
+                "error: refusing to apply. Re-run with --force to emit the "
+                "diff anyway (for inspection only — dtk will reject it).",
+                file=sys.stderr,
+            )
+            return 3
+        else:
+            for line in msg_lines:
+                print(f"warning: {line}", file=sys.stderr)
+            print(
+                "warning: --force in effect; emitting diff despite cycle risk.",
+                file=sys.stderr,
+            )
 
     new_text = serialize_splits(preamble, blocks)
 
