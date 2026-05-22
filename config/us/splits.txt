@@ -34,21 +34,12 @@ kyoshin/main.cpp:
 	.sdata2     start:0x80665AB8 end:0x80665B80
 
 split1.s:
-	.rodata     start:0x804FA440 end:0x804FB050
-	.rodata     start:0x804FB058 end:0x804FB1D8
-	.rodata     start:0x804FB1E0 end:0x80504168
-	.rodata     start:0x80504170 end:0x805139D8
-	.data       start:0x80524BC8 end:0x805261B8
-	.data       start:0x805261C8 end:0x80526690
-	.data       start:0x805266A8 end:0x80533490
-	.data       start:0x805334A0 end:0x8053B928
+	.rodata     start:0x804FA440 end:0x805139D8
+	.data       start:0x80524BC8 end:0x8053B928
 	.bss        start:0x805704C8 end:0x80577790
 	.sdata      start:0x806618B0 end:0x80662F30
 	.sbss       start:0x80663D10 end:0x80664C40
-	.sdata2     start:0x80665B90 end:0x80665E90
-	.sdata2     start:0x80665E98 end:0x806661E0
-	.sdata2     start:0x806661F0 end:0x80667DB8
-	.sdata2     start:0x80667DC0 end:0x80669020
+	.sdata2     start:0x80665B90 end:0x80669020
 
 PowerPC_EABI_Support/src/Runtime/New.cp:
 	.rodata     start:0x805139D8 end:0x805139E8
@@ -140,9 +131,6 @@ kyoshin/plugin/pluginMath.cpp:
 	extab       start:0x800073C8 end:0x800073D0
 	extabindex  start:0x800223A8 end:0x800223B4
 	.text       start:0x8004B664 end:0x8004B700
-	.rodata     start:0x804FB050 end:0x804FB058
-	.data       start:0x805261B8 end:0x805261C8
-	.sdata2     start:0x80665E90 end:0x80665E98
 
 kyoshin/action/CActParamAnim.cpp:
 	extab       start:0x800073D0 end:0x8000761C
@@ -190,9 +178,6 @@ kyoshin/plugin/pluginPad.cpp:
 	extab       start:0x800079EC end:0x800079FC
 	extabindex  start:0x80022C54 end:0x80022C6C
 	.text       start:0x80061DE0 end:0x80061F70
-	.rodata     start:0x804FB1D8 end:0x804FB1E0
-	.data       start:0x80526690 end:0x805266A8
-	.sdata2     start:0x806661E0 end:0x806661F0
 
 kyoshin/cf/CfRes.cpp:
 	extab       start:0x800079FC end:0x80007D48
@@ -836,9 +821,6 @@ kyoshin/plugin/pluginSnd.cpp:
 
 kyoshin/plugin/pluginGame.cpp:
 	.text       start:0x801AD518 end:0x801AD534
-	.rodata     start:0x80504168 end:0x80504170
-	.data       start:0x80533490 end:0x805334A0
-	.sdata2     start:0x80667DB8 end:0x80667DC0
 
 kyoshin/menu/CMenuVision.cpp:
 	extab       start:0x8000FC1C end:0x8000FCF4
