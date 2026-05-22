@@ -51,3 +51,4 @@ compile_commands.json
 /.claude/
 /docs/briefs/
 /docs/state.md
+/docs/decomp-workflow.md
