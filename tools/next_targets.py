@@ -13,8 +13,21 @@ Heuristic, in priority order:
    matches" momentum.
 
 Pulls Object entries from ``configure.py`` via :mod:`tools._object_table`
-and ``.text`` sizes from ``config/<region>/splits.txt``. Both files exist
-in a fresh clone, so this works *before* a successful build.
+and splits-derived data (``.text`` sizes, section sets, region scope)
+from ``config/<region>/splits.txt`` via :mod:`tools._region_splits`. Both
+files exist in a fresh clone, so this works *before* a successful build.
+
+Two filter knobs land via brief 008:
+
+- ``--region`` (existing flag; behaviour upgrade): also restricts the
+  candidate set to TUs that actually ship in that region's splits.txt.
+  Without this filter, picks could include TUs that don't link into the
+  region decomper is targeting.
+- ``--needs-no-asm``: excludes TUs whose splits.txt entry has data
+  sections (``.data`` / ``.rodata`` / ``.sdata2`` / ``.bss`` / ``.ctors``
+  / etc.) parked outside the ``.text`` / ``extab`` / ``extabindex``
+  trio. Avoids the workaround pluginTime.cpp needed where data bytes
+  still sat in the catch-all ``split1.s``.
 """
 
 from __future__ import annotations
@@ -38,6 +51,13 @@ from tools._object_table import (  # noqa: E402  (sys.path adjusted above)
     ObjectEntry,
     default_configure_path,
     parse_object_table,
+)
+from tools._region_splits import (  # noqa: E402
+    PURE_CODE_SECTIONS,
+    default_splits_path,
+    is_pure_code,
+    parse_split_paths,
+    parse_split_sections,
 )
 
 DEFAULT_REGION = "jp"
@@ -64,6 +84,8 @@ class Candidate:
     siblings_matched: int
     siblings_total: int
     brief_neighbour: bool
+    sections: tuple[str, ...]
+    pure_code: bool
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -74,6 +96,8 @@ class Candidate:
             "siblings_matched": self.siblings_matched,
             "siblings_total": self.siblings_total,
             "brief_neighbour": self.brief_neighbour,
+            "sections": list(self.sections),
+            "pure_code": self.pure_code,
         }
 
 
@@ -136,12 +160,29 @@ def rank_candidates(
     entries: list[ObjectEntry],
     text_sizes: dict[str, int],
     brief_paths: set[str],
+    sections_by_tu: dict[str, set[str]],
     *,
     region: str,
     module_prefix: str | None,
+    region_paths: set[str] | None,
+    needs_no_asm: bool,
 ) -> list[Candidate]:
+    """Filter and rank candidate unmatched TUs.
+
+    Filtering order: region-splits scope → module prefix → needs-no-asm →
+    drop already-matched. Sibling-match scoring is computed *after*
+    filtering so the ratios reflect the actual visible scope.
+    """
+
+    if region_paths is not None:
+        entries = [e for e in entries if e.path in region_paths]
     if module_prefix:
         entries = [e for e in entries if e.path.startswith(module_prefix)]
+    if needs_no_asm:
+        entries = [
+            e for e in entries
+            if is_pure_code(sections_by_tu.get(e.path, set()))
+        ]
 
     matched_in_dir, total_in_dir = _sibling_groups(entries, region)
     brief_dirs = {os.path.dirname(p) for p in brief_paths}
@@ -167,6 +208,7 @@ def rank_candidates(
             - size_penalty
             + (BRIEF_NEIGHBOUR_BONUS if brief_neighbour else 0.0)
         )
+        sections = sections_by_tu.get(entry.path, set())
         candidates.append(
             Candidate(
                 entry=entry,
@@ -175,6 +217,8 @@ def rank_candidates(
                 siblings_matched=siblings_matched,
                 siblings_total=siblings_total,
                 brief_neighbour=brief_neighbour,
+                sections=tuple(sorted(sections)),
+                pure_code=is_pure_code(sections),
             )
         )
 
@@ -188,8 +232,15 @@ def render_text(
     region: str,
     limit: int,
     scope_total: int,
+    needs_no_asm: bool,
 ) -> str:
-    lines = [f"Suggested next targets for region={region} (top {limit}):"]
+    flags: list[str] = []
+    if needs_no_asm:
+        flags.append("needs-no-asm")
+    flag_str = f" [{', '.join(flags)}]" if flags else ""
+    lines = [
+        f"Suggested next targets for region={region}{flag_str} (top {limit}):"
+    ]
     if not candidates:
         if scope_total == 0:
             lines.append("  (no TUs match the requested filter)")
@@ -226,7 +277,11 @@ def main(argv: list[str] | None = None) -> int:
         "--region",
         choices=("jp", "eu", "us"),
         default=DEFAULT_REGION,
-        help=f"Region context for matched-sibling counts (default: {DEFAULT_REGION}).",
+        help=(
+            "Region scope. Filters candidates to TUs in "
+            "config/<region>/splits.txt AND computes sibling-match counts "
+            f"against that region's Object statuses. Default: {DEFAULT_REGION}."
+        ),
     )
     parser.add_argument(
         "--module",
@@ -242,6 +297,16 @@ def main(argv: list[str] | None = None) -> int:
         help=f"How many candidates to print (default: {DEFAULT_LIMIT}).",
     )
     parser.add_argument(
+        "--needs-no-asm",
+        action="store_true",
+        help=(
+            "Only suggest TUs whose splits.txt sections are a subset of "
+            f"{sorted(PURE_CODE_SECTIONS)}. Skips TUs with data sections "
+            "(.data/.rodata/.sdata2/.bss/.ctors/...) that would force a "
+            "scaffolder splits-update pass before the TU can be matched."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON instead of the text summary.",
@@ -255,18 +320,39 @@ def main(argv: list[str] | None = None) -> int:
     entries = parse_object_table(args.configure)
     text_sizes = parse_text_sizes(splits_path) if splits_path.is_file() else {}
     brief_paths = collect_brief_paths(briefs_dir)
-
-    scope_entries = (
-        [e for e in entries if e.path.startswith(args.module)]
-        if args.module
-        else entries
+    region_paths = (
+        parse_split_paths(default_splits_path(args.region))
+        if splits_path.is_file()
+        else None
     )
+    sections_by_tu = (
+        parse_split_sections(default_splits_path(args.region))
+        if splits_path.is_file()
+        else {}
+    )
+
+    # Replicate the in-rank-fn filtering so scope_total reflects the user's
+    # filter without having to refactor rank_candidates to return it.
+    scope_entries = list(entries)
+    if region_paths is not None:
+        scope_entries = [e for e in scope_entries if e.path in region_paths]
+    if args.module:
+        scope_entries = [e for e in scope_entries if e.path.startswith(args.module)]
+    if args.needs_no_asm:
+        scope_entries = [
+            e for e in scope_entries
+            if is_pure_code(sections_by_tu.get(e.path, set()))
+        ]
+
     candidates = rank_candidates(
         entries,
         text_sizes,
         brief_paths,
+        sections_by_tu,
         region=args.region,
         module_prefix=args.module,
+        region_paths=region_paths,
+        needs_no_asm=args.needs_no_asm,
     )
 
     if args.json:
@@ -274,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
             "region": args.region,
             "module": args.module,
             "limit": args.limit,
+            "needs_no_asm": args.needs_no_asm,
             "scope_total": len(scope_entries),
             "candidates": [c.as_json() for c in candidates[:args.limit]],
         }
@@ -286,6 +373,7 @@ def main(argv: list[str] | None = None) -> int:
                 region=args.region,
                 limit=args.limit,
                 scope_total=len(scope_entries),
+                needs_no_asm=args.needs_no_asm,
             )
         )
 
