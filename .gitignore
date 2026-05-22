@@ -40,3 +40,14 @@ compile_commands.json
 /*.txt
 *.exe
 .DS_Store
+
+# cntrl_alt_lenny's local AI-agent workflow — kept off fork main so upstream
+# PRs (cntrl-alt-lenny:<branch> → xbret:main) never carry it. Files stay
+# on disk locally; the brain/decomper/scaffolder Claude Code sessions read
+# them from there. Cross-machine sync (if/when needed) goes via a separate
+# mechanism (sibling repo / syncthing / manual copy), not the fork.
+/AGENTS.md
+/CLAUDE.md
+/.claude/
+/docs/briefs/
+/docs/state.md
