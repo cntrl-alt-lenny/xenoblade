@@ -19,8 +19,13 @@ CBattery::~CBattery(){
 }
 
 void CBattery::func_802B92A4(){
-    mFileHandle = CDeviceFile::readFile(CWorkThreadSystem::getWorkMem(), "/menu/Battery.arc",
-    this, 0, 0);
+    mFileHandle = CDeviceFile::readFile(CWorkThreadSystem::getWorkMem(),
+#if defined(VERSION_JP)
+        "/menu/Battery.arc",
+#else // EU/US: assets live under menu/jp/ (mirrors the pattern in main.cpp)
+        "menu/jp/Battery.arc",
+#endif
+        this, 0, 0);
     //likely member functions of the class
     CDeviceFile::func_8044F154(mFileHandle, 3);
     CDeviceFile::setHandleFlag2(mFileHandle);
