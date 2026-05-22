@@ -9,7 +9,7 @@ namespace cf {
         _sArtsSet::_sArtsSet_UnkVirtualFunc1();
 
         for(int i = 0; i < 24; i++){
-            mArtsParams[i].CArtsParam_UnkVirtualFunc1();
+            mArtsParams[i].UnkVirtualFunc1();
         }
     }
 }

@@ -56,7 +56,7 @@ namespace cf {
 
         CAttackParam();
 
-        virtual void CAttackParam_UnkVirtualFunc1(){ //0x8
+        virtual void UnkVirtualFunc1(){ //0x8
             unk0 = 0;
             unk20 = 0;
             unk24 = 0;
@@ -98,9 +98,9 @@ namespace cf {
             std::memset(unk38, 0, sizeof(unk38));
             std::memset(unk6C, 0, sizeof(unk6C));
         }
-        virtual u8 CAttackParam_UnkVirtualFunc2(); //0xC
-        virtual void CAttackParam_UnkVirtualFunc3(u8 r4); //0x10
-        virtual void CAttackParam_UnkVirtualFunc4(); //0x14
+        virtual u8 UnkVirtualFunc2(); //0xC
+        virtual void UnkVirtualFunc3(u8 r4); //0x10
+        virtual void UnkVirtualFunc4(); //0x14
 
     };
 
@@ -125,9 +125,12 @@ namespace cf {
         UNKTYPE* unk88;
 
         CArtsParam();
-        virtual void CArtsParam_UnkVirtualFunc1();
-        virtual u8 CArtsParam_UnkVirtualFunc2();
-        virtual void CArtsParam_UnkVirtualFunc3(u8 r4);
+        // CArtsParam overrides CAttackParam's virtuals 1-3 with same-name methods
+        // so the vtable slots are reused (not appended). The constructor's
+        // UnkVirtualFunc1() call resolves to slot 2 instead of a new slot 6.
+        virtual void UnkVirtualFunc1();
+        virtual u8 UnkVirtualFunc2();
+        virtual void UnkVirtualFunc3(u8 r4);
     };
 
     //size: 0x38
