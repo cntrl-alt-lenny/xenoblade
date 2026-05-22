@@ -35,6 +35,10 @@ namespace cf{
         static void setPad(int r3, CPad* pPad, u32 r5);
         static CfPadData* getCfPadData();
         static CPad* getCurrentPad();
+        // Time-related getters used by kyoshin/plugin/pluginTime.cpp.
+        // Each is a 1-instruction trampoline to a free function in cf/.
+        static UNKWORD func_80086DA0();
+        static UNKWORD func_80086DBC();
 
         static bool checkUnkFlag(int bit){
             return sUnkFlags & (1 << bit);
