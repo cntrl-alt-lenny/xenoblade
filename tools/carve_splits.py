@@ -42,10 +42,19 @@ sub-ranges with other TUs interleaved between them, the resulting
 ordering constraints can't be linearised and dtk fails with
 ``Cyclic dependency encountered while resolving link order``. Only TUs
 whose data lives at the very start or very end of ``split1.s``'s range
-in every section they touch can be safely carved. The check runs after
-the slice is computed; bypass with ``--force`` only to inspect what a
-hypothetical multi-pseudo-unit split would produce (the diff stays
-unappliable).
+in every section they touch can be safely carved.
+
+**Multi-pseudo-unit promotion (added during brief 025, cycle 13).**
+``--promote-multi-pseudo-unit`` resolves the cycle for middle-of-
+``split1.s`` carves by splitting the catch-all into ``split1a.s`` +
+``split1b.s`` + ... — one pseudo-unit per contiguous sub-range. Each
+pseudo-unit ends up with at most one range per section, so dtk treats
+them as independent TU nodes and the cycle doesn't fire. dtk
+auto-discovers the new pseudo-units from ``splits.txt`` (verified via
+``tools/project.py`` — ``split1.s`` is NOT in ``configure.py``; only
+``splits.txt`` registers it as a build unit). No ``configure.py``
+changes needed. Unblocks the cycle-6-deferred carves
+(``pluginGame.cpp``, ``pluginMath.cpp``, ``pluginPad.cpp``).
 """
 
 from __future__ import annotations
@@ -410,6 +419,113 @@ def _split1_fragmentation(
     return counts
 
 
+def _pseudo_unit_name(index: int) -> str:
+    """Return ``split1a.s``, ``split1b.s``, …, ``split1z.s``."""
+
+    if 0 <= index < 26:
+        return f"split1{chr(ord('a') + index)}.s"
+    raise SystemExit(
+        f"error: multi-pseudo-unit promotion needs {index + 1} units but "
+        f"only 26 letter suffixes are allocated. Add a numbered fallback "
+        f"or rework the carve batch."
+    )
+
+
+def promote_split1_to_multi_pseudo_units(
+    blocks: list[TuBlock],
+    split1_block: TuBlock,
+) -> list[str]:
+    """Promote ``split1.s`` to ``split1a.s`` + ``split1b.s`` + …
+
+    Operates on the *post-slice* state: ``split1_block.sections`` already
+    has multiple sub-ranges in any fragmented section (because
+    :func:`slice_split1_section` has just run). The promotion redistributes
+    those sub-ranges across N pseudo-units where ``N = max sub-ranges
+    across any section``. Each pseudo-unit ends up with at most one range
+    per section, so dtk's link-order graph treats them as independent TU
+    nodes and the carved TUs sit *between* pseudo-units rather than
+    fragmenting any single one — resolving the cycle-6 cycle bug from
+    PR #12.
+
+    Mutates ``blocks`` in place: removes the original ``split1.s`` block
+    and inserts the new pseudo-unit blocks in its slot. Returns the list
+    of new pseudo-unit names (e.g. ``["split1a.s", "split1b.s"]``) for
+    the report. Returns an empty list when no promotion is needed (i.e.
+    every section already has ≤ 1 sub-range).
+    """
+
+    # 1) Group existing sub-ranges by section name, sorted by address.
+    sections_by_name: dict[str, list[SectionRange]] = {}
+    for sec in split1_block.sections:
+        sections_by_name.setdefault(sec.section, []).append(sec)
+    for subs in sections_by_name.values():
+        subs.sort(key=lambda s: s.start)
+
+    # 2) N pseudo-units = max sub-ranges across any section. If everything
+    #    is already ≤ 1, no promotion needed.
+    max_subranges = max((len(v) for v in sections_by_name.values()), default=0)
+    if max_subranges < 2:
+        return []
+
+    # 3) Build N empty pseudo-unit blocks.
+    new_blocks: list[TuBlock] = [
+        TuBlock(header=f"{_pseudo_unit_name(i)}:\n")
+        for i in range(max_subranges)
+    ]
+
+    # 4) Distribute sub-ranges to pseudo-units in the conventional ELF
+    #    section order (.rodata, .data, .bss, .sdata, .sbss, .sdata2)
+    #    rather than the alphabetical order ``slice_split1_section``
+    #    leaves them in — dtk doesn't care, but human review is easier
+    #    when emitted order matches typical splits.txt convention.
+    _CANONICAL_SECTION_ORDER = (
+        ".init",
+        "extab",
+        "extabindex",
+        ".text",
+        ".ctors",
+        ".dtors",
+        ".rodata",
+        ".data",
+        ".bss",
+        ".sdata",
+        ".sbss",
+        ".sdata2",
+        ".sbss2",
+    )
+    rank = {name: i for i, name in enumerate(_CANONICAL_SECTION_ORDER)}
+    section_order = sorted(
+        sections_by_name.keys(),
+        key=lambda s: (rank.get(s, 999), s),
+    )
+
+    for section_name in section_order:
+        sorted_subs = sections_by_name[section_name]
+        for i, sub in enumerate(sorted_subs):
+            line = section_line(section_name, sub.start, sub.end)
+            target_block = new_blocks[i]
+            target_block.lines.append(line)
+            target_block.sections.append(
+                SectionRange(
+                    raw=line,
+                    section=section_name,
+                    start=sub.start,
+                    end=sub.end,
+                )
+            )
+
+    # 5) Trailing blank line per block (matches splits.txt formatting).
+    for block in new_blocks:
+        block.lines.append("\n")
+
+    # 6) Replace split1.s with the new blocks, preserving position in
+    #    the blocks list (so other TUs above/below stay in place).
+    idx = blocks.index(split1_block)
+    blocks[idx : idx + 1] = new_blocks
+
+    return [b.header.rstrip(":\n") for b in new_blocks]
+
+
 def slice_split1_section(
     block: TuBlock, section: str, carve_ranges: list[CarveRange]
 ) -> None:
@@ -677,6 +793,20 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--promote-multi-pseudo-unit",
+        action="store_true",
+        help=(
+            "When a carve would fragment split1.s, promote split1.s to "
+            "split1a.s + split1b.s + ... — one pseudo-unit per contiguous "
+            "sub-range. Each pseudo-unit ends up with ≤ 1 range per "
+            "section, so dtk's link-order graph treats them as independent "
+            "TU nodes and the cycle from PR #12 doesn't fire. Unblocks "
+            "middle-of-split1.s carves like pluginGame / pluginMath / "
+            "pluginPad. dtk auto-discovers the new pseudo-units from "
+            "splits.txt; no configure.py changes needed."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON describing the computed carves (in addition to the diff).",
@@ -749,36 +879,51 @@ def main(argv: list[str] | None = None) -> int:
     # split.  Discovered during cycle 6 verification (PR #12 iteration);
     # see the brief 012 followup notes in the PR body for the full trace.
     fragmentation = _split1_fragmentation(split1_block, all_sections_touched)
+    promoted_pseudo_units: list[str] = []
     if fragmentation:
-        msg_lines = ["fragmentation cycle risk after carve:"]
-        for section, count in fragmentation.items():
-            msg_lines.append(
-                f"  split1.s {section}: {count} sub-ranges (must be ≤ 1 to "
-                f"avoid dtk link-order cycle)"
+        if args.promote_multi_pseudo_unit:
+            promoted_pseudo_units = promote_split1_to_multi_pseudo_units(
+                blocks,
+                split1_block,
             )
-        msg_lines.append(
-            "Only carves that lie at the start or end of split1.s's existing "
-            "range in every touched section are safe. TUs whose data sits "
-            "in the middle of split1.s require either a sweep of every TU "
-            "between them and the boundary, or a multi-pseudo-unit split of "
-            "split1.s itself — both out of scope for this tool."
-        )
-        if not args.force:
-            for line in msg_lines:
-                print(f"error: {line}", file=sys.stderr)
             print(
-                "error: refusing to apply. Re-run with --force to emit the "
-                "diff anyway (for inspection only — dtk will reject it).",
+                f"info: promoted split1.s → {', '.join(promoted_pseudo_units)} "
+                f"({len(promoted_pseudo_units)} pseudo-units) to avoid dtk "
+                f"link-order cycle. dtk auto-discovers these from splits.txt; "
+                f"no configure.py changes needed.",
                 file=sys.stderr,
             )
-            return 3
         else:
-            for line in msg_lines:
-                print(f"warning: {line}", file=sys.stderr)
-            print(
-                "warning: --force in effect; emitting diff despite cycle risk.",
-                file=sys.stderr,
+            msg_lines = ["fragmentation cycle risk after carve:"]
+            for section, count in fragmentation.items():
+                msg_lines.append(
+                    f"  split1.s {section}: {count} sub-ranges (must be ≤ 1 to "
+                    f"avoid dtk link-order cycle)"
+                )
+            msg_lines.append(
+                "Either limit the batch to TUs whose data lies at the start "
+                "or end of split1.s's existing range (boundary carves), or "
+                "re-run with --promote-multi-pseudo-unit to split split1.s "
+                "into split1a.s + split1b.s + ... so each pseudo-unit ends "
+                "up with ≤ 1 range per section."
             )
+            if not args.force:
+                for line in msg_lines:
+                    print(f"error: {line}", file=sys.stderr)
+                print(
+                    "error: refusing to apply. Re-run with --force to emit "
+                    "the diff anyway (for inspection only — dtk will reject "
+                    "it).",
+                    file=sys.stderr,
+                )
+                return 3
+            else:
+                for line in msg_lines:
+                    print(f"warning: {line}", file=sys.stderr)
+                print(
+                    "warning: --force in effect; emitting diff despite cycle risk.",
+                    file=sys.stderr,
+                )
 
     new_text = serialize_splits(preamble, blocks)
 
@@ -786,6 +931,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "region": args.region,
             "splits": str(splits_path),
+            "promoted_pseudo_units": promoted_pseudo_units,
             "tu_carves": {
                 tu: [
                     {

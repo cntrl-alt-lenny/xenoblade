@@ -209,15 +209,19 @@ def _all_tu_paths(asm_root: Path) -> list[tuple[str, Path]]:
     out: list[tuple[str, Path]] = []
     for path in sorted(asm_root.rglob("*.s")):
         rel = path.relative_to(asm_root)
-        # Skip top-level pseudo-units like split1.s and *_data.s (they
-        # have no real functions; just data).
-        if rel.parent == Path(".") and rel.name in {
-            "split1.s",
-            "criware_data.s",
-            "monolibdata1.s",
-            "monolibdata2.s",
-            "nw4r_data.s",
-        }:
+        # Skip top-level pseudo-units (they hold data, not functions).
+        # Covers split1.s, the cycle-13 split1a/b/c/d/... promotion
+        # outputs, and the per-lib data files (criware_data.s,
+        # monolibdata1.s, monolibdata2.s, nw4r_data.s).
+        if rel.parent == Path(".") and (
+            re.fullmatch(r"split1[a-z]*\.s", rel.name)
+            or rel.name in {
+                "criware_data.s",
+                "monolibdata1.s",
+                "monolibdata2.s",
+                "nw4r_data.s",
+            }
+        ):
             continue
         # Configure paths are .cpp for C++, .c for C. We can't tell from
         # the .s name alone. Try both and keep whatever matches a known
