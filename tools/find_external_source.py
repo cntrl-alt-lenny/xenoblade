@@ -128,17 +128,57 @@ REPOS: tuple[Repo, ...] = (
         ),
         upstream_url="https://github.com/kiwi515/open_rvl",
     ),
+    Repo(
+        name="mkw",
+        # Mario Kart Wii uses `Wii/0x4201_127` per configure.py — i.e.
+        # mwcc 4.2 build 127 ("Wii MW 1.0 patched"). One major-step
+        # away from Xenoblade's mwcc_43_151 (Wii 1.1), same family that
+        # OGWS / NSMBW use. Same distance-band as open_rvl, but the
+        # nw4r/EGG/RVL pool is fresher (more functions matched).
+        mwcc_sp="mwcc_42_127",
+        lib_roots=("lib",),
+        libs_mapping=(
+            ("lib/nw4r", "libs/nw4r/src"),
+            ("lib/rvl", "libs/RVL_SDK/src/revolution"),
+            ("lib/MSL", "libs/PowerPC_EABI_Support/MSL_C"),
+            ("lib/runtime", "libs/PowerPC_EABI_Support/src/Runtime"),
+            ("lib/egg", "libs/egg/src"),
+            ("lib/rfl", "libs/RVL_SDK/src/RVLFaceLib"),
+        ),
+        upstream_url="https://github.com/doldecomp/mkw",
+    ),
+    Repo(
+        name="brawl",
+        # Brawl uses `GC/3.0a5.2` = mwcc 4.2 build 60422. Same Wii family
+        # as mkw but a step earlier (different optimizer pass shape).
+        # ~186 game-side .c/.cpp files mixed at brawl/src/<module>/;
+        # no separate nw4r/RVL_SDK lib roots in the project layout, so
+        # libs_mapping coverage is sparser than mkw's. Name-based lookup
+        # still works across the entire tree.
+        mwcc_sp="mwcc_42_60422",
+        lib_roots=("src",),
+        libs_mapping=(
+            # No clean lib-root subtrees; the only obvious one is sora/snd
+            # which mirrors brawl's nw4r-snd shape. Other ports need the
+            # `port_external_source --apply` target chosen by hand.
+            ("src/sora/snd", "libs/nw4r/src/snd"),
+        ),
+        upstream_url="https://github.com/doldecomp/brawl",
+    ),
 )
 
 
-# Top-level C function definition. Tolerates pointer-spelled return
-# types and `static`/`inline`/`asm` qualifiers. The matcher catches
-# the line whose first token is a return type and whose remainder
-# looks like ``name(`` at file scope (column 0).
+# Top-level C / C++ function definition. Tolerates pointer-spelled
+# return types, `static`/`inline`/`asm`/`virtual` qualifiers, and
+# C++ `Class::Method` / `Namespace::Class::Method` names. The matcher
+# catches the line whose first token is a return type and whose
+# remainder looks like ``name(`` at file scope (column 0). The name
+# capture allows ``::`` for C++ methods and trailing ``operator XYZ``
+# qualifiers.
 _FUNC_DEF_RE = re.compile(
-    r"^(?:static\s+|inline\s+|extern\s+|asm\s+|volatile\s+|const\s+)*"
+    r"^(?:static\s+|inline\s+|extern\s+|asm\s+|volatile\s+|const\s+|virtual\s+)*"
     r"(?:[A-Za-z_][\w*\s]*?\s|\*\s*)"
-    r"(?P<name>[A-Za-z_]\w*)"
+    r"(?P<name>(?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)"
     r"\s*\("
 )
 _C_KEYWORDS = frozenset({
@@ -226,9 +266,19 @@ def build_external_index(
             root = repo_root / lib_root
             if not root.is_dir():
                 continue
-            for c_file in sorted(root.rglob("*.c")):
+            for c_file in sorted(
+                p for p in root.rglob("*")
+                if p.suffix in (".c", ".cpp")
+            ):
                 for fn in _extract_functions(c_file, repo.name, repo_root):
                     index.setdefault(fn.name, []).append(fn)
+                    # For C++ methods (`Class::Method`), also index by
+                    # just the bare method name so a query like ``Init``
+                    # surfaces every ``X::Init`` candidate. Mangled-name
+                    # → demangled mapping is a future enhancement.
+                    if "::" in fn.name:
+                        bare = fn.name.rsplit("::", 1)[-1]
+                        index.setdefault(bare, []).append(fn)
     return index
 
 

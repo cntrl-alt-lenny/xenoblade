@@ -56,6 +56,8 @@ from pathlib import Path
 from typing import Any
 
 _REPO_ROOT = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 VENDOR_DIR = _REPO_ROOT / "tools" / "_vendor" / "decomp-toolkit-signatures"
 UPSTREAM_BASE = (
@@ -206,6 +208,15 @@ def lookup_by_name(
     return hits
 
 
+def lookup_by_hash(
+    entries: list[SignatureEntry], target_hash: str
+) -> list[SignatureEntry]:
+    """Return every entry whose ``hash`` field equals ``target_hash``."""
+
+    target = target_hash.lower()
+    return [e for e in entries if e.sha1.lower() == target]
+
+
 def refresh_vendor(vendor_dir: Path) -> int:
     """Mirror every signature YAML from upstream to ``vendor_dir``.
 
@@ -255,6 +266,52 @@ def render_text(query: str, hits: list[SignatureEntry]) -> str:
     return "\n".join(lines)
 
 
+def _resolve_bytes_from_asm(spec: str, build_dir: Path) -> tuple[str, str]:
+    """Parse ``<tu_path>:<func_name>`` → (computed_hash_hex, info_summary).
+
+    Looks up the function in ``build/<region>/asm/<TU>.s`` via
+    :mod:`tools._reloc_parse`, computes the SHA-1 hash following the
+    decomp-toolkit signature algorithm (8-bytes-per-instruction
+    ``ins,pat`` blob with reloc-affected bits masked per kind), and
+    returns the hex hash. The ``spec`` accepts the optional ``src/``
+    or ``libs/`` prefix that other tools use; everything before ``:``
+    is treated as the configure-style TU path.
+    """
+
+    from tools._reloc_parse import parse_function_bytes, signature_hash  # noqa: E402
+
+    if ":" not in spec:
+        raise SystemExit(
+            f"error: --bytes-from-asm requires '<tu_path>:<func_name>' "
+            f"(got {spec!r})"
+        )
+    tu_part, func_name = spec.rsplit(":", 1)
+    for prefix in ("src/", "libs/"):
+        if tu_part.startswith(prefix):
+            tu_part = tu_part[len(prefix):]
+            break
+    asm_path = build_dir / "asm" / Path(tu_part).with_suffix(".s")
+    if not asm_path.is_file():
+        raise SystemExit(
+            f"error: TU asm not found: {asm_path}. Did you pass --build-dir?"
+        )
+    funcs = parse_function_bytes(asm_path)
+    func = funcs.get(func_name)
+    if func is None:
+        # Surface a short list so the user can fix a typo.
+        sample = sorted(funcs)[:5]
+        sample_hint = ", ".join(sample) + (", …" if len(funcs) > 5 else "")
+        raise SystemExit(
+            f"error: function {func_name!r} not found in {asm_path.name}. "
+            f"Functions parsed there ({len(funcs)}): {sample_hint}"
+        )
+    info = (
+        f"function {func.name} at 0x{func.start_addr:08X}, "
+        f"size={func.size}, relocs={len(func.relocs)}"
+    )
+    return signature_hash(func), info
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Look up symbol metadata in decomp-toolkit's signature DB.",
@@ -279,6 +336,36 @@ def main(argv: list[str] | None = None) -> int:
         help="Fetch the latest signature YAMLs from upstream before searching.",
     )
     parser.add_argument(
+        "--bytes-from-asm",
+        type=str,
+        default=None,
+        metavar="TU:FUNC",
+        help=(
+            "Look up by function-byte hash instead of by name. Extract the "
+            "function's bytes from build/<region>/asm/<TU>.s, mask reloc-"
+            "affected bits per kind (PpcAddr16Ha/Lo, PpcEmbSda21, "
+            "PpcRel24, PpcRel14), SHA-1 the result, and match against the "
+            "DB's `hash` field. Accepts `<tu_path>:<func_name>` "
+            "(e.g. `kyoshin/CGame.cpp:CGame::Init` or "
+            "`RVL_SDK/src/revolution/os/__start.c:__start`)."
+        ),
+    )
+    parser.add_argument(
+        "--region",
+        choices=("jp", "eu", "us"),
+        default="us",
+        help="Region for default build dir (default: us).",
+    )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Override build directory (default: <repo>/build/<region>). "
+            "Used to locate `asm/<TU>.s` for --bytes-from-asm."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit JSON instead of the human-readable summary.",
@@ -288,17 +375,51 @@ def main(argv: list[str] | None = None) -> int:
     if args.refresh:
         fetched = refresh_vendor(args.vendor_dir)
         print(f"refresh: {fetched} YAML files vendored to {args.vendor_dir}", file=sys.stderr)
-        if args.name is None:
+        if args.name is None and args.bytes_from_asm is None:
             return 0
 
+    if args.bytes_from_asm is not None:
+        build_dir = (
+            args.build_dir
+            if args.build_dir is not None
+            else Path(_REPO_ROOT) / "build" / args.region
+        )
+        target_hash, info = _resolve_bytes_from_asm(args.bytes_from_asm, build_dir)
+        entries = load_db(args.vendor_dir)
+        hits = lookup_by_hash(entries, target_hash)
+        if args.json:
+            payload = {
+                "query_kind": "bytes-from-asm",
+                "tu_func": args.bytes_from_asm,
+                "computed_hash": target_hash,
+                "info": info,
+                "hit_count": len(hits),
+                "hits": [h.as_json() for h in hits],
+            }
+            json.dump(payload, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+        else:
+            print(f"hash: {target_hash}  ({info})")
+            if not hits:
+                print(
+                    "No DB entry with this hash. Either the function isn't in "
+                    "the DB, or its mwcc variant differs from the DB's known "
+                    "variants (different SP, different patches)."
+                )
+            else:
+                print()
+                print(render_text(f"<hash:{target_hash}>", hits))
+        return 0 if hits else 1
+
     if args.name is None:
-        parser.error("provide a symbol name to look up (or --refresh by itself)")
+        parser.error("provide a symbol name to look up (or --refresh / --bytes-from-asm)")
 
     entries = load_db(args.vendor_dir)
     hits = lookup_by_name(entries, args.name)
 
     if args.json:
         payload = {
+            "query_kind": "name",
             "query": args.name,
             "hit_count": len(hits),
             "hits": [h.as_json() for h in hits],
