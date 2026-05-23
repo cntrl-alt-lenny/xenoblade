@@ -64,6 +64,17 @@ VENDOR_DIR = _REPO_ROOT / "tools" / "_vendor"
 # Xenoblade's default compiler. Per ``configure.py`` ProjectConfig.linker_version.
 XENOBLADE_MWCC = "mwcc_43_151"  # Wii MW 1.1
 
+# Libs whose target subdirs preserve mixed case. The rest of Xenoblade's
+# libs/ tree lowercases the immediate subdir (``RVL_SDK/src/revolution/os``,
+# ``nw4r/src/g3d``, ``monolib/src/util``, …); PowerPC_EABI_Support keeps
+# ``Runtime/`` ``MetroTRK/`` ``MSL_C/`` mixed-case per the standard
+# Metrowerks layout. The lowercase-subdir heuristic in
+# ``Repo.libs_target_for`` skips libs whose libs_prefix starts with one
+# of these strings.
+_CASE_PRESERVING_LIBS: tuple[str, ...] = (
+    "libs/PowerPC_EABI_Support",
+)
+
 # How close are two mwcc versions in codegen behaviour? Lower = closer.
 # Tuned heuristically from the cycle-9 PPC-6 codegen-wall observations:
 # 4.3 family is mostly peephole-stable across point releases; 4.2 ↔ 4.3
@@ -108,10 +119,19 @@ class Repo:
         for vendored_prefix, libs_prefix in self.libs_mapping:
             if file_rel.startswith(vendored_prefix):
                 tail = file_rel[len(vendored_prefix):].lstrip("/")
-                # Casefold the immediate subdir to match Xenoblade's
-                # lowercase convention; preserve mixed-case in filenames.
                 parts = tail.split("/")
-                if parts:
+                # Most Xenoblade libs (RVL_SDK, nw4r, monolib, etc.) use
+                # lowercase immediate subdirs (``os/``, ``dvd/``, ``g3d/``
+                # …), so the heuristic lowercases the first tail
+                # component. PowerPC_EABI_Support is the exception: its
+                # subdirs are mixed case (``Runtime/``, ``MetroTRK/``,
+                # ``MSL_C/``) and the cycle-13 PR #27 review surfaced
+                # the bug — lowercasing produces wrong suggestions
+                # there. Add the libs prefix to ``_CASE_PRESERVING_LIBS``
+                # if a new mapping needs to keep mixed case too.
+                if parts and not any(
+                    libs_prefix.startswith(p) for p in _CASE_PRESERVING_LIBS
+                ):
                     parts[0] = parts[0].lower()
                 return libs_prefix + "/" + "/".join(parts)
         return None
