@@ -451,7 +451,7 @@ config.libs = [
             Object(NonMatching, "kyoshin/cf/CActParamAnimGame.cpp"),
             Object(NonMatching, "kyoshin/plugin/pluginCam.cpp"),
             Object(NonMatching, "kyoshin/cf/CTaskGameEffAfter.cpp"),
-            Object(MatchingFor("jp"), "kyoshin/plugin/pluginPad.cpp"),
+            Object(Matching, "kyoshin/plugin/pluginPad.cpp"),
             Object(NonMatching, "kyoshin/cf/CfRes.cpp"),
             Object(NonMatching, "kyoshin/cf/IResInfo.cpp"),
             Object(NonMatching, "kyoshin/cf/CfScript.cpp"),
