@@ -76,9 +76,13 @@ void __OSShutdownDevices(u32 event) {
     BOOL osIntr;
     BOOL keepEnable;
 
+    // Note: OS_SD_EVENT_RESTART (4) is intentionally NOT in the FALSE
+    // branch -- the baserom keeps pad recalibration enabled across a
+    // system restart (per the cmplwi r0, 1 / subi 5 switch shape in
+    // .text). open_rvl ships a newer SDK that includes case 4 in FALSE;
+    // Xenoblade's SDK predates that change.
     switch (event) {
     case OS_SD_EVENT_FATAL:
-    case OS_SD_EVENT_RESTART:
     case OS_SD_EVENT_RETURN_TO_MENU:
     case OS_SD_EVENT_LAUNCH_APP:
         keepEnable = FALSE;
@@ -86,6 +90,7 @@ void __OSShutdownDevices(u32 event) {
     case 1:
     case OS_SD_EVENT_SHUTDOWN:
     case 3:
+    case OS_SD_EVENT_RESTART:
     default:
         keepEnable = TRUE;
         break;
@@ -117,6 +122,12 @@ void __OSShutdownDevices(u32 event) {
 }
 
 // TODO(kiwi) There must be a better way....
+// NOTE: target asm inlines this into OSShutdownSystem AND keeps the
+// standalone definition. Adding `inline` here doesn't trigger mwcc
+// (probably needs the body in the header for `-inline auto` to fire
+// on cross-call sites). Deferred -- OSShutdownSystem stays at 85.31%
+// until the inlining mechanism is worked out (potential PPC-X wall
+// candidate: "mwcc -inline auto doesn't cross .c/.h boundary").
 void __OSGetDiscState(u8* out) {
     u32 flags;
 
