@@ -101,45 +101,45 @@ namespace cf{
 
     void CfBdat::func_801414CC(){
         CBdat::func_8003AA34();
-        spBtlPcListFileData = CBdat::getFP("BTL_pclist");
-        spBtlEneListFileData = CBdat::getFP("BTL_enelist");
-        spBtlSkillListFileData = CBdat::getFP("BTL_skilllist");
-        spBtlGrowListFileData = CBdat::getFP("BTL_growlist");
-        spBtlBuffListFileData = CBdat::getFP("BTL_bufflist");
-        spFldPointListFileData = CBdat::getFP("FLD_pointlist");
-        spFldTboxListFileData = CBdat::getFP("FLD_tboxlist");
-        spBtlCamListFileData = CBdat::getFP("BTL_camlist");
-        spBtlCamDataListFileData = CBdat::getFP("BTL_camdatalist");
-        spBtlCrystalNameListFileData = CBdat::getFP("BTL_crystalnamelist");
-        spMnuItemFileData = CBdat::getFP("MNU_item");
-        spFldNpcListFileData = CBdat::getFP("FLD_npclist");
-        spFldMapListFileData = CBdat::getFP("FLD_maplist");
-        spLandmarkListFileData = CBdat::getFP("landmarklist");
-        spFldValPopListFileData = CBdat::getFP("FLD_valpoplist");
-        spFldDmObjListFileData = CBdat::getFP("FLD_dmobjlist");
-        spItmItemListFileData = CBdat::getFP("ITM_itemlist");
-        spItmWpnListFileData = CBdat::getFP("ITM_wpnlist");
-        spItmEquipListFileData = CBdat::getFP("ITM_equiplist");
-        spItmCrystalListFileData = CBdat::getFP("ITM_crystallist");
-        spItmDropCrystalListFileData = CBdat::getFP("ITM_dropcrystallist");
-        spItmCollectListFileData = CBdat::getFP("ITM_collectlist");
-        spItmMaterialListFileData = CBdat::getFP("ITM_materiallist");
-        spItmValuableListFileData = CBdat::getFP("ITM_valuablelist");
-        spItmArtsListFileData = CBdat::getFP("ITM_artslist");
-        spItmHeadListFileData = CBdat::getFP("ITM_headlist");
-        spItmBodyListFileData = CBdat::getFP("ITM_bodylist");
-        spItmArmListFileData = CBdat::getFP("ITM_armlist");
-        spItmWaistListFileData = CBdat::getFP("ITM_waistlist");
-        spItmLeggListFileData = CBdat::getFP("ITM_legglist");
+        spBtlPcListFileData = getFP("BTL_pclist");
+        spBtlEneListFileData = getFP("BTL_enelist");
+        spBtlSkillListFileData = getFP("BTL_skilllist");
+        spBtlGrowListFileData = getFP("BTL_growlist");
+        spBtlBuffListFileData = getFP("BTL_bufflist");
+        spFldPointListFileData = getFP("FLD_pointlist");
+        spFldTboxListFileData = getFP("FLD_tboxlist");
+        spBtlCamListFileData = getFP("BTL_camlist");
+        spBtlCamDataListFileData = getFP("BTL_camdatalist");
+        spBtlCrystalNameListFileData = getFP("BTL_crystalnamelist");
+        spMnuItemFileData = getFP("MNU_item");
+        spFldNpcListFileData = getFP("FLD_npclist");
+        spFldMapListFileData = getFP("FLD_maplist");
+        spLandmarkListFileData = getFP("landmarklist");
+        spFldValPopListFileData = getFP("FLD_valpoplist");
+        spFldDmObjListFileData = getFP("FLD_dmobjlist");
+        spItmItemListFileData = getFP("ITM_itemlist");
+        spItmWpnListFileData = getFP("ITM_wpnlist");
+        spItmEquipListFileData = getFP("ITM_equiplist");
+        spItmCrystalListFileData = getFP("ITM_crystallist");
+        spItmDropCrystalListFileData = getFP("ITM_dropcrystallist");
+        spItmCollectListFileData = getFP("ITM_collectlist");
+        spItmMaterialListFileData = getFP("ITM_materiallist");
+        spItmValuableListFileData = getFP("ITM_valuablelist");
+        spItmArtsListFileData = getFP("ITM_artslist");
+        spItmHeadListFileData = getFP("ITM_headlist");
+        spItmBodyListFileData = getFP("ITM_bodylist");
+        spItmArmListFileData = getFP("ITM_armlist");
+        spItmWaistListFileData = getFP("ITM_waistlist");
+        spItmLeggListFileData = getFP("ITM_legglist");
         
         lbl_80666A74 = nullptr;
         lbl_80666A78 = nullptr;
         lbl_80666A7C = 0;
         lbl_8066698C = nullptr;
         
-        spBtlPsvSkillFileData = CBdat::getFP("BTL_PSVskill");
-        spBtlPsvLinkFileData = CBdat::getFP("BTL_PSVlink");
-        spBtlPssListFileData = CBdat::getFP("BTL_PSSlist");
+        spBtlPsvSkillFileData = getFP("BTL_PSVskill");
+        spBtlPsvLinkFileData = getFP("BTL_PSVlink");
+        spBtlPssListFileData = getFP("BTL_PSSlist");
 
         const char* temp[ARRAY_SIZE(lbl_80577510)] = {
             "JNL_quest0000",
@@ -172,7 +172,7 @@ namespace cf{
         };
 
         for(int i = 0; i < (int)ARRAY_SIZE(lbl_80577510); i++){
-            lbl_80577510[i] = CBdat::getFP(temp[i]);
+            lbl_80577510[i] = getFP(temp[i]);
         }
 
         resetMapBdatFileDataPointers();
@@ -219,7 +219,7 @@ namespace cf{
     //This feels a bit janky, but if it works it works :p
     #define GET_MAP_BDAT_PTR(dest, name) \
     string.format(STR(name)"%02d%02d", mapId, areaId); \
-    dest = CBdat::getFP(string.c_str());
+    dest = getFP(string.c_str());
 
     void CfBdat::loadMapBdatFileDataPointers(int mapId, int areaId){
         FixStr<64> string;
@@ -252,7 +252,7 @@ namespace cf{
         void* fileDataPtr;
 
         if(pName != nullptr){
-            fileDataPtr = CBdat::getFP(pName);
+            fileDataPtr = getFP(pName);
         }else{
             fileDataPtr = nullptr;
         }
@@ -295,8 +295,8 @@ namespace cf{
         if(lbl_80666A6C == pEventFile->mFileHandle){
             if(pEventFile->unk0 == 1 && *(u32*)((u32)pEventFile + 0x14) != 0){
                 CBdat::func_8003AA78(3, lbl_80666A70);
-                spMnuEveStartFileData = CBdat::getFP("MNU_eve_start");
-                spMnuEveTableFileData = CBdat::getFP("MNU_eve_table");
+                spMnuEveStartFileData = getFP("MNU_eve_start");
+                spMnuEveTableFileData = getFP("MNU_eve_table");
             }
             
             lbl_80666A6C = nullptr;
