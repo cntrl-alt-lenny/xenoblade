@@ -80,6 +80,17 @@ DEFAULT_TOP_N = 5
 
 _PLACEHOLDER_REGION_PREFIX = "eu"
 
+# Brief 037 M-cap refinement: byte window for "competing placeholders"
+# around a class's already-renamed static. Matches the adjacency window
+# from the original adjacency signal (find_adjacent_named_symbols).
+_ADJACENCY_WINDOW = 64
+
+# Confidence band for adjacency within M-cap budget. Closest competing
+# placeholder gets the ceiling; furthest within budget gets the floor.
+# Beyond budget, the adjacency signal is dropped entirely.
+_ADJACENCY_CONF_CEILING = 1.00
+_ADJACENCY_CONF_FLOOR = 0.70
+
 _SYMBOL_LINE_RE = re.compile(
     r"^(?P<name>\S+)\s*=\s*\.(?P<section>\w+):0x(?P<addr>[0-9A-Fa-f]+)\s*;\s*//\s*"
     r"type:(?P<type>\w+)\s*"
@@ -121,6 +132,13 @@ class ClassCandidate:
     voting_tus: set[str] = field(default_factory=set)
     statics: list[StaticMember] = field(default_factory=list)
     evidence: str = ""  # human-readable rationale ("adjacent symbol at ±N bytes")
+    # Brief 037 M-cap fields. Set only for candidates sourced from the
+    # adjacency signal (None for directory-voted candidates):
+    adjacency_confidence: float | None = None     # inverse-distance score, within budget
+    adjacency_rank: int | None = None             # 0 = closest competing placeholder
+    adjacency_competing_count: int | None = None  # total competing placeholders in window
+    slot_info: tuple[int, int, int] | None = None  # (M_total, claimed_count, slots_remaining)
+    adjacency_distance_abs: int | None = None     # bytes from query to nearest claimed static
 
     @property
     def qualified_name(self) -> str:
@@ -187,6 +205,97 @@ def parse_mangled_name(symbol: str) -> tuple[str, tuple[str, ...], str] | None:
     return name, (), encoded[digit_end:]
 
 
+_PLACEHOLDER_NAME_RE = re.compile(r"^(lbl|jumptable)_eu_[0-9A-Fa-f]+$")
+
+
+def _count_claimed_class_statics(
+    namespace_path: tuple[str, ...], class_name: str, symbols_txt: Path
+) -> list[int]:
+    """Return addresses of every already-renamed static for ``class_name``.
+
+    Looks up symbols matching ``<staticname>__<mwcc-q-encoded-class>`` in
+    ``symbols.txt`` and returns their addresses. Used by the M-cap to
+    judge "how many of this class's declared static slots are already
+    accounted for". Functions are excluded by suffix shape (``F<args>``
+    after the class encoding).
+    """
+
+    suffix = "__" + _mwcc_qualified_encoding(namespace_path, class_name)
+    addresses: list[int] = []
+    with symbols_txt.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            match = _SYMBOL_LINE_RE.match(line)
+            if not match:
+                continue
+            name = match.group("name")
+            # A static-data symbol ends exactly at the class suffix (no
+            # trailing ``F<argshape>``). Functions have ``F`` + arg
+            # encoding after the class suffix and are excluded.
+            if not name.endswith(suffix):
+                continue
+            section = match.group("section") or ""
+            # Filter to data-shaped sections — methods live in .text.
+            if section == "text":
+                continue
+            addresses.append(int(match.group("addr"), 16))
+    return addresses
+
+
+def _find_placeholders_in_window(
+    anchor_addrs: list[int],
+    section: str,
+    symbols_txt: Path,
+    window: int = _ADJACENCY_WINDOW,
+) -> list[tuple[int, str]]:
+    """Return ``[(addr, name), ...]`` for placeholders near any anchor.
+
+    A placeholder is a symbol whose name matches ``lbl_eu_<hex>`` or
+    ``jumptable_eu_<hex>`` and whose address is within ``±window`` of
+    at least one anchor. Used by the M-cap to enumerate the set of
+    unnamed candidates competing for a class's remaining static slots.
+    """
+
+    if not anchor_addrs:
+        return []
+    out: list[tuple[int, str]] = []
+    with symbols_txt.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            match = _SYMBOL_LINE_RE.match(line)
+            if not match:
+                continue
+            name = match.group("name")
+            if not _PLACEHOLDER_NAME_RE.match(name):
+                continue
+            sym_section = "." + match.group("section")
+            if sym_section != section:
+                continue
+            addr = int(match.group("addr"), 16)
+            if any(abs(addr - a) <= window for a in anchor_addrs):
+                out.append((addr, name))
+    return out
+
+
+def _min_distance_to_anchors(addr: int, anchor_addrs: list[int]) -> int:
+    """Min absolute byte distance from ``addr`` to any anchor."""
+    if not anchor_addrs:
+        return 1 << 30
+    return min(abs(addr - a) for a in anchor_addrs)
+
+
+def _adjacency_confidence_for_rank(rank: int, slots_remaining: int) -> float:
+    """Inverse-distance confidence within an M-cap budget.
+
+    rank=0  → ``_ADJACENCY_CONF_CEILING`` (1.00).
+    rank=(slots_remaining-1) → ``_ADJACENCY_CONF_FLOOR`` (0.70).
+    Linear interpolation between.
+    """
+
+    if slots_remaining <= 1:
+        return _ADJACENCY_CONF_CEILING
+    drop = _ADJACENCY_CONF_CEILING - _ADJACENCY_CONF_FLOOR
+    return _ADJACENCY_CONF_CEILING - (rank / (slots_remaining - 1)) * drop
+
+
 def find_adjacent_named_symbols(
     placeholder_addr: int, section: str, symbols_txt: Path, window: int = 64
 ) -> list[tuple[int, str]]:
@@ -198,7 +307,6 @@ def find_adjacent_named_symbols(
     """
 
     out: list[tuple[int, str]] = []
-    placeholder_re = re.compile(r"^(lbl|jumptable)_eu_[0-9A-Fa-f]+$")
     with symbols_txt.open("r", encoding="utf-8") as handle:
         for line in handle:
             match = _SYMBOL_LINE_RE.match(line)
@@ -208,7 +316,7 @@ def find_adjacent_named_symbols(
             sym_section = "." + match.group("section")
             if sym_section != section:
                 continue
-            if placeholder_re.match(name):
+            if _PLACEHOLDER_NAME_RE.match(name):
                 continue
             addr = int(match.group("addr"), 16)
             offset = addr - placeholder_addr
@@ -472,22 +580,23 @@ class Suggestion:
 
     @property
     def confidence(self) -> float:
-        # Adjacent-symbol matches get votes >= 1000; collapse to a
-        # confidence of 1.0 since adjacent neighbours almost always
-        # mean "same class". Reader-directory votes are raw counts
-        # divided by total readers.
-        if self.candidate.votes >= 1000:
-            return 1.0
+        # Adjacency-sourced candidates carry an explicit confidence
+        # computed by ``_adjacency_confidence_for_rank`` under the M-cap.
+        # Directory-sourced candidates use the legacy raw-vote ratio.
+        if self.candidate.adjacency_confidence is not None:
+            return self.candidate.adjacency_confidence
         if self.total_readers == 0:
             return 0.0
         return self.candidate.votes / self.total_readers
 
     @property
     def signal_kind(self) -> str:
-        return "adjacent" if self.candidate.votes >= 1000 else "directory"
+        if self.candidate.adjacency_confidence is not None:
+            return "adjacent"
+        return "directory"
 
     def as_json(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "qualified_class": self.candidate.qualified_name,
             "header": (
                 str(self.candidate.header_rel)
@@ -514,6 +623,17 @@ class Suggestion:
                 for s in self.candidate.statics
             ],
         }
+        if self.candidate.slot_info is not None:
+            m_total, claimed, remaining = self.candidate.slot_info
+            payload["m_cap"] = {
+                "declared_statics": m_total,
+                "claimed": claimed,
+                "slots_remaining": remaining,
+                "query_rank": self.candidate.adjacency_rank,
+                "competing_placeholders": self.candidate.adjacency_competing_count,
+                "distance_to_nearest_claimed_b": self.candidate.adjacency_distance_abs,
+            }
+        return payload
 
 
 def suggest_names(
@@ -523,16 +643,26 @@ def suggest_names(
     build_dir: Path,
     symbols_txt: Path,
     top_n: int,
-) -> tuple[PlaceholderSymbol | None, list[Suggestion]]:
+) -> tuple[PlaceholderSymbol | None, list[Suggestion], list[dict[str, Any]]]:
     """Top-N class-context candidates for the placeholder.
+
+    Returns ``(meta, suggestions, rejected_adjacency)``. The third element
+    lists classes whose adjacency signal was M-cap-rejected for this query
+    (transparency for the decomper; surfaced in JSON / markdown footnote).
 
     Two-signal pipeline (cycle-16 PR #31 finding: most readers are
     unmatched-no-source TUs, so source-side ``#include`` voting alone
     is too sparse):
 
-    1. **Adjacent named symbols** — already-renamed symbols within
-       ±64 bytes in the same section. These give the strongest signal
-       since adjacent statics almost always live in the same class.
+    1. **Adjacent named symbols (M-capped per brief 037)** — already-
+       renamed symbols within ±64 bytes in the same section identify
+       the candidate class. The M-cap then limits how many surrounding
+       placeholders can plausibly belong to that class: at most
+       ``M - already_claimed`` slots remain. Competing placeholders are
+       ranked by distance to claimed statics; only those within the
+       remaining-slot budget keep the adjacency signal. Beyond budget,
+       the class is rejected (falls back to directory voting if it
+       also surfaces there).
     2. **Reader directory voting** — count readers by their TU's
        directory path (extracted from the ``.file`` directive in the
        asm). Most placeholders are read by TUs sharing one namespace.
@@ -547,17 +677,20 @@ def suggest_names(
         )
     readers = find_reader_tus(placeholder, asm_root)
     if not readers:
-        return meta, []
+        return meta, [], []
 
     candidates: list[ClassCandidate] = []
     seen_classes: set[str] = set()
+    rejected_adjacency: list[dict[str, Any]] = []
+    query_is_placeholder = meta is not None and bool(
+        _PLACEHOLDER_NAME_RE.match(meta.name)
+    )
 
-    # ---- Signal 1: adjacent named symbols ----
+    # ---- Signal 1: adjacent named symbols (M-capped, brief 037) ----
     if meta is not None:
         adjacent = find_adjacent_named_symbols(meta.addr, meta.section, symbols_txt)
-        # Each adjacent named symbol's class becomes a high-confidence
-        # candidate. Multiple adjacent hits to the same class collapse
-        # to one entry; votes = number of adjacent hits.
+        # Each adjacent named symbol's class becomes a candidate, subject
+        # to the M-cap budget check below.
         adjacent_class_votes: Counter[tuple[tuple[str, ...], str]] = Counter()
         adjacent_class_neighbors: dict[tuple[tuple[str, ...], str], list[tuple[int, str]]] = {}
         for offset, mangled in adjacent:
@@ -572,9 +705,42 @@ def suggest_names(
         for (ns_path, cls), vote_count in adjacent_class_votes.most_common():
             if cls in seen_classes:
                 continue
-            seen_classes.add(cls)
             header_path = _find_header_for_class(cls, ns_path)
             statics = _parse_class_context(header_path)[2] if header_path else []
+            m_total = len(statics)
+            all_claimed_addrs = _count_claimed_class_statics(ns_path, cls, symbols_txt)
+            claimed_count = len(all_claimed_addrs)
+            slots_remaining = max(0, m_total - claimed_count)
+
+            # Local anchors = renamed statics for this class within the
+            # query's ±64b window (these define the competing-placeholder
+            # window).
+            local_anchor_addrs = [
+                meta.addr + off
+                for off, _ in adjacent_class_neighbors[(ns_path, cls)]
+            ]
+
+            # Enumerate all unnamed placeholders in window of any local
+            # anchor; sort by distance to nearest anchor (ties broken
+            # by address).
+            competing = _find_placeholders_in_window(
+                local_anchor_addrs, meta.section, symbols_txt
+            )
+            competing.sort(
+                key=lambda p: (
+                    _min_distance_to_anchors(p[0], local_anchor_addrs),
+                    p[0],
+                )
+            )
+
+            query_distance = _min_distance_to_anchors(meta.addr, local_anchor_addrs)
+            query_rank: int | None = None
+            if query_is_placeholder:
+                for i, (addr, _name) in enumerate(competing):
+                    if addr == meta.addr:
+                        query_rank = i
+                        break
+
             try:
                 rel = (
                     header_path.relative_to(_REPO_ROOT)
@@ -583,27 +749,79 @@ def suggest_names(
                 )
             except ValueError:
                 rel = header_path
+
+            if query_is_placeholder:
+                # M-cap budget check
+                if (
+                    slots_remaining == 0
+                    or query_rank is None
+                    or query_rank >= slots_remaining
+                ):
+                    qualified = "::".join(list(ns_path) + [cls])
+                    rejected_adjacency.append({
+                        "qualified_class": qualified,
+                        "header": str(rel) if rel is not None else None,
+                        "m_total": m_total,
+                        "claimed": claimed_count,
+                        "slots_remaining": slots_remaining,
+                        "query_rank": query_rank,
+                        "competing_placeholders": len(competing),
+                        "distance_to_nearest_claimed_b": query_distance,
+                        "reason": (
+                            f"M-cap: {claimed_count}/{m_total} declared "
+                            f"static slot(s) already claimed; "
+                            f"{slots_remaining} remaining. Query is "
+                            + (
+                                f"rank {query_rank + 1} of {len(competing)} "
+                                "competing placeholders — beyond budget."
+                                if query_rank is not None
+                                else "outside the competing-placeholder window."
+                            )
+                        ),
+                    })
+                    continue
+                confidence = _adjacency_confidence_for_rank(
+                    query_rank, slots_remaining
+                )
+            else:
+                # Query is already a named symbol — adjacency carries the
+                # full signal without the M-cap (the query already owns
+                # whichever slot it occupies).
+                query_rank = 0
+                confidence = _ADJACENCY_CONF_CEILING
+
+            seen_classes.add(cls)
             neighbors = adjacent_class_neighbors[(ns_path, cls)]
-            evidence = (
+            evidence_parts = [
                 "Adjacent named symbol(s) at "
                 + ", ".join(
                     f"{'+' if off > 0 else ''}{off}b ({nm})"
                     for off, nm in neighbors[:3]
                 )
-            )
-            # Inflate vote weight for adjacent-symbol matches so they
-            # rank above directory-vote candidates. A single adjacent
-            # named neighbour is a much stronger signal than even a
-            # full reader-directory consensus.
+            ]
+            if query_is_placeholder:
+                evidence_parts.append(
+                    f"M-cap budget OK: {claimed_count}/{m_total} declared "
+                    f"slot(s) claimed ({slots_remaining} remaining); query "
+                    f"is rank {query_rank + 1} of {len(competing)} competing "
+                    f"placeholders (distance {query_distance}b)"
+                )
             candidates.append(
                 ClassCandidate(
                     header_rel=rel,
                     class_name=cls,
                     namespace_path=ns_path,
-                    votes=1000 + vote_count,  # priority boost
+                    votes=1000 + vote_count,  # priority boost over directory
                     voting_tus=set(),
                     statics=statics,
-                    evidence=evidence,
+                    evidence="; ".join(evidence_parts),
+                    adjacency_confidence=confidence,
+                    adjacency_rank=query_rank,
+                    adjacency_competing_count=(
+                        len(competing) if query_is_placeholder else None
+                    ),
+                    slot_info=(m_total, claimed_count, slots_remaining),
+                    adjacency_distance_abs=query_distance,
                 )
             )
 
@@ -659,13 +877,14 @@ def suggest_names(
         )
         for c in candidates
     ]
-    return meta, suggestions
+    return meta, suggestions, rejected_adjacency
 
 
 def render_text(
     placeholder: str,
     meta: PlaceholderSymbol | None,
     suggestions: list[Suggestion],
+    rejected_adjacency: list[dict[str, Any]] | None = None,
 ) -> str:
     lines: list[str] = []
     lines.append(f"# Symbol-name suggestions for `{placeholder}`")
@@ -711,6 +930,21 @@ def render_text(
                 "  - No existing static data members declared in the header."
             )
         lines.append("")
+
+    if rejected_adjacency:
+        lines.append("## Adjacency rejected (M-cap)")
+        lines.append("")
+        lines.append(
+            "Classes whose adjacency signal was rejected because the query "
+            "placeholder is beyond the class's declared-static budget. The "
+            "decomper should NOT use these as 1.00-confidence renames; "
+            "investigate manually or use the directory-vote candidates above."
+        )
+        lines.append("")
+        for entry in rejected_adjacency:
+            lines.append(f"- `{entry['qualified_class']}` — {entry['reason']}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -777,7 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: symbols.txt not found: {symbols_txt}", file=sys.stderr)
         return 2
 
-    meta, suggestions = suggest_names(
+    meta, suggestions, rejected_adjacency = suggest_names(
         args.placeholder,
         region=args.region,
         build_dir=build_dir,
@@ -801,11 +1035,12 @@ def main(argv: list[str] | None = None) -> int:
                 suggestions[0].total_readers if suggestions else 0
             ),
             "suggestions": [s.as_json() for s in suggestions],
+            "rejected_adjacency": rejected_adjacency,
         }
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
     else:
-        print(render_text(args.placeholder, meta, suggestions))
+        print(render_text(args.placeholder, meta, suggestions, rejected_adjacency))
 
     return 0 if suggestions else 1
 
