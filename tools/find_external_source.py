@@ -165,6 +165,64 @@ REPOS: tuple[Repo, ...] = (
         ),
         upstream_url="https://github.com/doldecomp/brawl",
     ),
+    Repo(
+        name="nsmbw",
+        # NSMBW-Community/NSMBW-Decomp — confirmed via prepare_objdiff.py:
+        # 'compiler': 'mwcc_43_151'. Exact match for Xenoblade's default
+        # (SP-distance 0, HIGH-confidence 1.00). 118 .c/.cpp files; lib
+        # roots cover nw4r + nw4hbm + egg. Game code (source/dol, dynamic
+        # REL plugins under source/d_*) skipped from libs_mapping — those
+        # are NSMBW-specific game code, not vendored SDK donors.
+        mwcc_sp="mwcc_43_151",
+        lib_roots=("source/lib",),
+        libs_mapping=(
+            ("source/lib/nw4r", "libs/nw4r/src"),
+            ("source/lib/nw4hbm", "libs/RVL_SDK/src/revolution/hbm/nw4hbm"),
+            # NSMBW has source/lib/egg but Xenoblade has no libs/egg/ —
+            # skip mapping. Name-based lookup still indexes egg files;
+            # port_external_source would need a manual --target.
+        ),
+        upstream_url="https://github.com/NSMBW-Community/NSMBW-Decomp",
+    ),
+    Repo(
+        name="ss",
+        # zeldaret/ss (Skyward Sword) — mixed compiler versions. The default
+        # linker is "Wii/1.5" (mwcc_43_188, SP-distance 2 from Xenoblade's
+        # mwcc_43_151) but the lib subdirs we care most about run at
+        # better SP-distances:
+        #
+        #   RVL_SDK / hbm        → "Wii/1.0" = mwcc_43_145  (distance 1, HIGH 0.92)
+        #   nw4r (most)          → "Wii/1.3" = mwcc_43_172  (distance 1, HIGH 0.92)
+        #   nw4r snd             → "Wii/1.6" = mwcc_43_202  (distance 2, MEDIUM 0.80)
+        #   PowerPC_EABI_Support → "Wii/1.5" = mwcc_43_188  (distance 2, MEDIUM 0.80)
+        #
+        # Pick mwcc_43_145 (Wii/1.0) as the rep version because that's
+        # what SS uses for the RVL_SDK lib — the highest-value subset of
+        # its donor space for our purposes. nw4r at Wii/1.3 lands in the
+        # same HIGH-confidence band anyway. PR body documents the per-
+        # subdir nuance so callers don't expect HIGH for snd/runtime.
+        mwcc_sp="mwcc_43_145",
+        lib_roots=(
+            # Restrict to SDK-relevant subdirs only. Indexing all of
+            # ss/src/ would pull in the 637 REL files + 241 d/ game-code
+            # files + 32 m/ files etc. — total ~17k unique names with
+            # near-zero Xenoblade overlap. The SDK subdirs below give a
+            # tighter, higher-density index.
+            "src/nw4r",
+            "src/PowerPC_EABI_Support",
+            "src/libms",
+            "src/egg",
+            "src/JSystem",
+        ),
+        libs_mapping=(
+            ("src/nw4r", "libs/nw4r/src"),
+            ("src/PowerPC_EABI_Support", "libs/PowerPC_EABI_Support"),
+            ("src/libms", "libs/PowerPC_EABI_Support/MSL_C/MSL_Common"),
+            # src/egg, src/JSystem have no Xenoblade target — name lookup
+            # still indexes them; manual --target for porting.
+        ),
+        upstream_url="https://github.com/zeldaret/ss",
+    ),
 )
 
 
