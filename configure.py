@@ -1322,7 +1322,7 @@ config.libs = [
         [
             Object(NonMatching, "CriWare/src/adx/adxf/adx_fini.c"),
             Object(NonMatching, "CriWare/src/adx/adxf/adx_fs.c"),
-            Object(MatchingFor("jp"), "CriWare/src/adx/adxf/adx_fcch.c"),
+            Object(Matching, "CriWare/src/adx/adxf/adx_fcch.c"),
             Object(NonMatching, "CriWare/src/adx/adxt/adx_fsvr.c"),
             Object(NonMatching, "CriWare/src/adx/adxt/adx_inis.c"),
             Object(NonMatching, "CriWare/src/adx/adxt/adx_lsc.c"),
@@ -1480,7 +1480,7 @@ config.libs = [
         "libnw4r_db",
         [
             Object(Matching, "nw4r/src/db/db_console.cpp"),
-            Object(MatchingFor("jp"), "nw4r/src/db/db_DbgPrintBase.cpp"),
+            Object(Matching, "nw4r/src/db/db_DbgPrintBase.cpp"),
             Object(MatchingFor("jp"), "nw4r/src/db/db_assert.cpp"),
         ],
     ),
