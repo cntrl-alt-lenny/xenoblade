@@ -41,15 +41,17 @@ compile_commands.json
 *.exe
 .DS_Store
 
-# cntrl_alt_lenny's local AI-agent workflow — kept off fork main so upstream
-# PRs (cntrl-alt-lenny:<branch> → xbret:main) never carry it. Files stay
-# on disk locally; the brain/decomper/scaffolder Claude Code sessions read
-# them from there. Cross-machine sync (if/when needed) goes via a separate
-# mechanism (sibling repo / syncthing / manual copy), not the fork.
-/AGENTS.md
-/CLAUDE.md
-/.claude/
-/docs/briefs/
-/docs/state.md
-/docs/decomp-workflow.md
-/docs/research/
+# cntrl_alt_lenny's three-agent decomp framework — brain/decomper/scaffolder
+# Claude Code sessions (see github.com/cntrl-alt-lenny/decomp-agent-framework).
+# Framework files (.claude/, AGENTS.md, CLAUDE.md, docs/briefs/, docs/state.md,
+# docs/decomp-workflow.md, docs/research/) are tracked in this fork so a fresh
+# `git clone` on any machine works out of the box.
+#
+# To submit upstream PRs (cntrl-alt-lenny:<branch> → xbret:main) without
+# carrying the framework files, branch off `upstream/main` instead of
+# `origin/main`:
+#   git fetch upstream
+#   git checkout -b fix-foo upstream/main
+#   # work, push, open PR on GitHub
+# Set up the upstream remote once per clone:
+#   git remote add upstream https://github.com/xbret/xenoblade.git

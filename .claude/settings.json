@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "description": "Project-level Claude Code settings for the Xenoblade Chronicles decomp. Hooks enforce lint/test/pre-push gates so the agent catches drift in-loop rather than at CI, and capture session-end summaries to a shared inbox so the brain can read what the other agents said without manual copy-paste. See .claude/hooks/*.py for env-var configuration.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/post_edit.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/pre_bash.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/save_agent_reply.py"
+          }
+        ]
+      }
+    ]
+  }
+}
