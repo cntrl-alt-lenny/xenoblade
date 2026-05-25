@@ -278,9 +278,10 @@ the brief itself:
 
 ### Open briefs
 
-- [038](docs/briefs/038-scaffolder-functions-hpp-sjis.md) — **scaffolder**: investigate sjiswrap Shift-JIS warning on `include/functions.hpp`.
-- [039](docs/briefs/039-decomper-close-one-partial-match.md) — **decomper**: push one ≥87% partial-match TU (start `CPadManager` 99.5%) to 100%.
+- [040](docs/briefs/040-scaffolder-vtable-shape-detection.md) — **scaffolder**: vtable-shape detector in `tools/suggest_symbol_name.py` (PR #38 feedback item).
+- [041](docs/briefs/041-decomper-g3d-anmclr-flip-retry.md) — **decomper**: retry `libs/nw4r/src/g3d/g3d_anmclr.cpp` flip (US), now unblocked by PR #39's carve.
 
 ### Closed briefs (reference)
 
-<!-- Recent closed briefs land here with a one-line outcome. Trim periodically. -->
+- 038 — scaffolder: sjiswrap Shift-JIS warning on `include/functions.hpp`. **Done** via PR #40 (em dash U+2014 in comment → ASCII `--`). Warning gone, SHA1 unchanged.
+- 039 — decomper: close one ≥87% partial-match TU to 100%. **Abandoned** — decomper set up the build but didn't pick a target or push. Superseded by brief 041 (different but related goal).

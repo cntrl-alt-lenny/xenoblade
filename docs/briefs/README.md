@@ -25,7 +25,9 @@ Briefs 001–037 lived locally per the prior workflow (their numbers are
 referenced in git history via `git log --grep='brief 0'`). Tracked-in-repo
 brief numbering starts at 038.
 
-| #   | Brief | Goal |
-|-----|-------|------|
-| 038 | [`scaffolder-functions-hpp-sjis`](038-scaffolder-functions-hpp-sjis.md) | Investigate sjiswrap Shift-JIS warning on `include/functions.hpp`; fix if real. |
-| 039 | [`decomper-close-one-partial-match`](039-decomper-close-one-partial-match.md) | Push one ≥ 87% partial-match TU (start with `CPadManager` at 99.5%) to 100% matched. |
+| #   | Brief | Goal | Status |
+|-----|-------|------|--------|
+| 038 | [`scaffolder-functions-hpp-sjis`](038-scaffolder-functions-hpp-sjis.md) | Investigate sjiswrap Shift-JIS warning on `include/functions.hpp`; fix if real. | Closed (PR #40) |
+| 039 | [`decomper-close-one-partial-match`](039-decomper-close-one-partial-match.md) | Push one ≥ 87% partial-match TU (start with `CPadManager` at 99.5%) to 100% matched. | Abandoned (superseded by 041) |
+| 040 | [`scaffolder-vtable-shape-detection`](040-scaffolder-vtable-shape-detection.md) | Add vtable-shape detector to `tools/suggest_symbol_name.py`; emit `__vt__<class>` at Tier-1 confidence. | Open |
+| 041 | [`decomper-g3d-anmclr-flip-retry`](041-decomper-g3d-anmclr-flip-retry.md) | Retry `libs/nw4r/src/g3d/g3d_anmclr.cpp` flip (US) now that PR #39's carve cleared the multi-define. | Open |
