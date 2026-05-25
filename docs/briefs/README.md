@@ -21,8 +21,11 @@ can pick it up cold without re-discovering context.
 
 ## Briefs
 
-<!-- Brain maintains this index manually or via a generator tool.
-     Format: "| NNN | [`<slug>`](NNN-<slug>.md) | <one-line goal> |" -->
+Briefs 001–037 lived locally per the prior workflow (their numbers are
+referenced in git history via `git log --grep='brief 0'`). Tracked-in-repo
+brief numbering starts at 038.
 
 | #   | Brief | Goal |
 |-----|-------|------|
+| 038 | [`scaffolder-functions-hpp-sjis`](038-scaffolder-functions-hpp-sjis.md) | Investigate sjiswrap Shift-JIS warning on `include/functions.hpp`; fix if real. |
+| 039 | [`decomper-close-one-partial-match`](039-decomper-close-one-partial-match.md) | Push one ≥ 87% partial-match TU (start with `CPadManager` at 99.5%) to 100% matched. |

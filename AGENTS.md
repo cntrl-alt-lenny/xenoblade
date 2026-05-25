@@ -278,7 +278,8 @@ the brief itself:
 
 ### Open briefs
 
-<!-- Brain maintains a one-line pointer per open brief here. -->
+- [038](docs/briefs/038-scaffolder-functions-hpp-sjis.md) — **scaffolder**: investigate sjiswrap Shift-JIS warning on `include/functions.hpp`.
+- [039](docs/briefs/039-decomper-close-one-partial-match.md) — **decomper**: push one ≥87% partial-match TU (start `CPadManager` 99.5%) to 100%.
 
 ### Closed briefs (reference)
 
