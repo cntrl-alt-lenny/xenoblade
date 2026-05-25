@@ -139,14 +139,32 @@ class ClassCandidate:
     adjacency_competing_count: int | None = None  # total competing placeholders in window
     slot_info: tuple[int, int, int] | None = None  # (M_total, claimed_count, slots_remaining)
     adjacency_distance_abs: int | None = None     # bytes from query to nearest claimed static
+    # Brief 040 vtable-shape detection fields. Set only for candidates sourced
+    # from the vtable signal (Tier-1 1.00, fires before adjacency / directory):
+    direct_symbol_name: str | None = None    # e.g. "__vt__Q22cf9CfResTask" — overrides template
+    vtable_typeinfo_label: str | None = None # first .4byte target (RTTI ptr)
+    vtable_destructor_entry: str | None = None  # e.g. "__dt__Q22cf9CfResTaskFv"
+    vtable_entry_count: int | None = None    # number of .4byte entries in the block
+    vtable_asm_path: str | None = None       # asm file the block was found in
 
     @property
     def qualified_name(self) -> str:
+        if self.direct_symbol_name is not None:
+            # Vtable-sourced: the candidate IS the suggestion, not a class context.
+            # Render the underlying class with namespace-aware "::"; falls back to
+            # the raw mangling for templated forms that can't be roundtripped.
+            parts = (*self.namespace_path, self.class_name)
+            return "::".join(parts) if self.class_name else self.direct_symbol_name
         parts = (*self.namespace_path, self.class_name)
         return "::".join(parts)
 
     @property
     def mangling_template(self) -> str:
+        # Vtable-sourced candidates carry a concrete symbol name, not a
+        # template; surface the direct name so the decomper can paste it
+        # verbatim into symbols.txt.
+        if self.direct_symbol_name is not None:
+            return self.direct_symbol_name
         return f"<staticname>__{_mwcc_qualified_encoding(self.namespace_path, self.class_name)}"
 
 
@@ -294,6 +312,214 @@ def _adjacency_confidence_for_rank(rank: int, slots_remaining: int) -> float:
         return _ADJACENCY_CONF_CEILING
     drop = _ADJACENCY_CONF_CEILING - _ADJACENCY_CONF_FLOOR
     return _ADJACENCY_CONF_CEILING - (rank / (slots_remaining - 1)) * drop
+
+
+# Brief 040 vtable-shape detection. The MWCC vtable layout in .data is:
+#
+#     .obj lbl_eu_<addr>, global
+#         .4byte <typeinfo_label>        # ← first entry: RTTI pointer
+#         .4byte 0x00000000              # ← top-offset (zero for simple inheritance)
+#         .4byte __dt__<class>Fv         # ← destructor (name-bearing entry)
+#         .4byte ...method_pointers...
+#     .endobj lbl_eu_<addr>
+#
+# The destructor symbol gives the class mangling directly. The typeinfo
+# pointer + non-trivial entry count are the secondary shape checks that
+# discriminate vtables from other .data blocks (e.g. literal arrays,
+# string tables) that happen to fall in the same size band.
+
+_VTABLE_SIZE_MIN = 0x14  # min vtable size (RTTI + 0 + dtor + 1-2 methods)
+_VTABLE_SIZE_MAX = 0xA0  # max plausible vtable size for typical MWCC class
+_OBJ_LINE_PREFIX = ".obj "
+_ENDOBJ_LINE_PREFIX = ".endobj "
+_DOT_4BYTE_RE = re.compile(r"^\s*\.4byte\s+(?P<token>\S+)")
+_DESTRUCTOR_RE = re.compile(r"^__dt__(?P<cls>.+)Fv$")
+
+
+@dataclass(frozen=True)
+class VtableDetection:
+    """Result of detecting a vtable shape at a placeholder's .data range."""
+
+    suggested_name: str           # "__vt__Q22cf9CfResTask"
+    class_mangling: str           # "Q22cf9CfResTask" (everything after __vt__)
+    destructor_entry: str         # "__dt__Q22cf9CfResTaskFv"
+    typeinfo_label: str           # "lbl_eu_80661A28" (first .4byte target)
+    entry_count: int              # number of .4byte entries in the block
+    asm_path_rel: str             # "split1c.s" — for the evidence string
+
+
+def _obj_line_variants(prefix: str, name: str) -> tuple[str, str]:
+    """Return the two ``.obj``/``.endobj`` line variants dtk emits.
+
+    Plain identifiers are written as ``.obj name, global``. Names that
+    contain template ``<>`` brackets or other shell-unsafe characters
+    are double-quoted: ``.obj "23CTTask<...>", global``. We need to
+    match either form when locating a vtable definition.
+    """
+
+    return f"{prefix}{name}", f'{prefix}"{name}"'
+
+
+def _find_definition_asm(placeholder: str, asm_root: Path) -> Path | None:
+    """Locate the .s file that DEFINES this placeholder (has ``.obj <name>``).
+
+    Each placeholder is defined in exactly one asm file (the catch-all or
+    per-TU split it belongs to); other files only reference it via ``.4byte``.
+    Walk in deterministic alphabetical order so results are reproducible.
+
+    Matches both plain (``.obj name, global``) and quoted (``.obj
+    "name", global``) forms — templated symbols like
+    ``CTTask<Q22cf9CfResTask>`` are emitted quoted.
+    """
+
+    plain, quoted = _obj_line_variants(_OBJ_LINE_PREFIX, placeholder)
+    plain_with_comma = f"{plain},"
+    quoted_with_comma = f"{quoted},"
+    for path in sorted(asm_root.rglob("*.s")):
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    if line.startswith(plain_with_comma) or line.startswith(quoted_with_comma):
+                        return path
+        except OSError:
+            continue
+    return None
+
+
+def _extract_obj_block(asm_path: Path, placeholder: str) -> list[str] | None:
+    """Return the lines between ``.obj <placeholder>`` and ``.endobj <placeholder>``.
+
+    Handles both plain and quoted variants (see ``_obj_line_variants``).
+    """
+
+    open_plain, open_quoted = _obj_line_variants(_OBJ_LINE_PREFIX, placeholder)
+    close_plain, close_quoted = _obj_line_variants(_ENDOBJ_LINE_PREFIX, placeholder)
+    in_block = False
+    out: list[str] = []
+    try:
+        with asm_path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                if not in_block:
+                    if line.startswith(open_plain) or line.startswith(open_quoted):
+                        in_block = True
+                    continue
+                if line.startswith(close_plain) or line.startswith(close_quoted):
+                    return out
+                out.append(line.rstrip("\n"))
+    except OSError:
+        return None
+    return None
+
+
+def _parse_vtable_entries(block_lines: list[str]) -> list[str]:
+    """Parse ``.4byte`` tokens from a block; return them in declaration order.
+
+    Strips surrounding double-quotes (dtk emits quoted tokens for names
+    that contain template ``<>`` brackets, e.g.
+    ``"__dt__23CTTask<Q22cf9CfResTask>Fv"``). The destructor regex then
+    works on the unquoted form regardless of source shape.
+    """
+
+    out: list[str] = []
+    for line in block_lines:
+        match = _DOT_4BYTE_RE.match(line)
+        if match:
+            token = match.group("token")
+            if token.startswith('"') and token.endswith('"') and len(token) >= 2:
+                token = token[1:-1]
+            out.append(token)
+    return out
+
+
+def detect_vtable_shape(
+    meta: PlaceholderSymbol, asm_root: Path
+) -> VtableDetection | None:
+    """Detect the MWCC vtable shape and return a Tier-1 ``__vt__`` suggestion.
+
+    Brief 040 algorithm:
+      1. ``.data`` section, size in [0x14, 0xA0].
+      2. First ``.4byte`` is a label reference (not a literal) — the
+         typeinfo / RTTI pointer.
+      3. At least one ``.4byte`` is ``__dt__<class>Fv`` — gives the
+         class mangling directly.
+
+    All three must hold. The destructor entry is the name-bearing one;
+    everything else is a discriminator to avoid false-positive matches
+    on small literal arrays / string tables that share the size band.
+    """
+
+    if meta.section != ".data":
+        return None
+    if not (_VTABLE_SIZE_MIN <= meta.size <= _VTABLE_SIZE_MAX):
+        return None
+
+    asm_path = _find_definition_asm(meta.name, asm_root)
+    if asm_path is None:
+        return None
+    block = _extract_obj_block(asm_path, meta.name)
+    if not block:
+        return None
+    entries = _parse_vtable_entries(block)
+    if len(entries) < 3:
+        # A vtable always has at least typeinfo + top-offset + destructor.
+        return None
+
+    # Discriminator: first entry must be a label-shaped token (typeinfo
+    # pointer), not a hex literal. ``lbl_<region>_<addr>`` is the dtk
+    # naming convention for unnamed pool labels; user-renamed labels
+    # (e.g. ``TYPE_NAME__Q34...``) are also acceptable as typeinfo
+    # targets, so anything not starting with ``0x`` qualifies.
+    first = entries[0]
+    if first.startswith("0x") or first.startswith("0X"):
+        return None
+    if not first[:1].isalpha() and first[:1] != "_":
+        return None
+
+    # Find the destructor — the name-bearing entry. Walk all entries
+    # (the destructor can appear at index 2 in the standard layout but
+    # may shift if MWCC inlined additional thunks).
+    for entry in entries:
+        dm = _DESTRUCTOR_RE.match(entry)
+        if dm:
+            class_mangling = dm.group("cls")
+            try:
+                asm_rel = asm_path.relative_to(asm_root).as_posix()
+            except ValueError:
+                asm_rel = asm_path.name
+            return VtableDetection(
+                suggested_name=f"__vt__{class_mangling}",
+                class_mangling=class_mangling,
+                destructor_entry=entry,
+                typeinfo_label=first,
+                entry_count=len(entries),
+                asm_path_rel=asm_rel,
+            )
+    return None
+
+
+def _split_vtable_class_mangling(
+    class_mangling: str,
+) -> tuple[tuple[str, ...], str | None]:
+    """Best-effort ``(namespace_path, class_name)`` from a vtable's class mangling.
+
+    Handles the two common shapes:
+      - ``Q22cf9CfResTask`` → (("cf",), "CfResTask")
+      - ``9CfGimmick``       → ((), "CfGimmick")
+
+    Returns ``((), None)`` when the mangling can't be cleanly split — e.g.
+    templated forms like ``23CTTask<Q22cf9CfResTask>`` (the angle brackets
+    don't match the basic Q-encoded shape). In those cases the caller
+    treats ``class_name`` as unavailable for header lookup and just emits
+    the raw vtable suggestion.
+    """
+
+    # Treat as the "encoded" portion of parse_mangled_name — but it has no
+    # `<name>__` prefix. Synthesize a fake prefix to reuse the parser.
+    parsed = parse_mangled_name(f"vt__{class_mangling}")
+    if parsed is None:
+        return (), None
+    _name, ns_path, cls = parsed
+    return ns_path, cls
 
 
 def find_adjacent_named_symbols(
@@ -580,6 +806,10 @@ class Suggestion:
 
     @property
     def confidence(self) -> float:
+        # Brief 040: vtable-sourced candidates are Tier-1 1.00 (the
+        # destructor entry gives the class mangling unambiguously).
+        if self.candidate.direct_symbol_name is not None:
+            return 1.0
         # Adjacency-sourced candidates carry an explicit confidence
         # computed by ``_adjacency_confidence_for_rank`` under the M-cap.
         # Directory-sourced candidates use the legacy raw-vote ratio.
@@ -591,6 +821,8 @@ class Suggestion:
 
     @property
     def signal_kind(self) -> str:
+        if self.candidate.direct_symbol_name is not None:
+            return "vtable"
         if self.candidate.adjacency_confidence is not None:
             return "adjacent"
         return "directory"
@@ -632,6 +864,14 @@ class Suggestion:
                 "query_rank": self.candidate.adjacency_rank,
                 "competing_placeholders": self.candidate.adjacency_competing_count,
                 "distance_to_nearest_claimed_b": self.candidate.adjacency_distance_abs,
+            }
+        if self.candidate.direct_symbol_name is not None:
+            payload["vtable"] = {
+                "suggested_name": self.candidate.direct_symbol_name,
+                "typeinfo_label": self.candidate.vtable_typeinfo_label,
+                "destructor_entry": self.candidate.vtable_destructor_entry,
+                "entry_count": self.candidate.vtable_entry_count,
+                "asm_path": self.candidate.vtable_asm_path,
             }
         return payload
 
@@ -675,6 +915,71 @@ def suggest_names(
             f"error: {asm_root} does not exist — run `ninja --version "
             f"{region}` first or pass --build-dir."
         )
+
+    query_is_placeholder = meta is not None and bool(
+        _PLACEHOLDER_NAME_RE.match(meta.name)
+    )
+
+    # ---- Signal 0: MWCC vtable shape (brief 040, Tier-1 1.00) ----
+    # Fires BEFORE every other signal. When the placeholder's .data block
+    # matches the vtable shape (typeinfo ptr + destructor entry), the
+    # destructor's class mangling gives the canonical ``__vt__<class>``
+    # symbol name directly — no need for adjacency / directory voting.
+    # PR #38's review noted the suggester misfired on 21 vtables because
+    # the directory-vote returned reader-side neighbours; this signal
+    # bypasses that whole code path on shape match.
+    if meta is not None and query_is_placeholder:
+        vtable_hit = detect_vtable_shape(meta, asm_root)
+        if vtable_hit is not None:
+            ns_path, class_name = _split_vtable_class_mangling(
+                vtable_hit.class_mangling
+            )
+            header_path = (
+                _find_header_for_class(class_name, ns_path)
+                if class_name is not None
+                else None
+            )
+            statics = _parse_class_context(header_path)[2] if header_path else []
+            try:
+                rel = (
+                    header_path.relative_to(_REPO_ROOT)
+                    if header_path is not None
+                    else None
+                )
+            except ValueError:
+                rel = header_path
+            evidence = (
+                f"MWCC vtable shape: .data {meta.size}b, "
+                f"{vtable_hit.entry_count} entries; typeinfo ptr → "
+                f"`{vtable_hit.typeinfo_label}`; destructor entry: "
+                f"`{vtable_hit.destructor_entry}` (gives class mangling "
+                f"directly)"
+            )
+            vtable_candidate = ClassCandidate(
+                header_rel=rel,
+                class_name=class_name or vtable_hit.class_mangling,
+                namespace_path=ns_path,
+                votes=0,  # vtable signal is route-by-direct_symbol_name, not votes
+                voting_tus=set(),
+                statics=statics,
+                evidence=evidence,
+                direct_symbol_name=vtable_hit.suggested_name,
+                vtable_typeinfo_label=vtable_hit.typeinfo_label,
+                vtable_destructor_entry=vtable_hit.destructor_entry,
+                vtable_entry_count=vtable_hit.entry_count,
+                vtable_asm_path=vtable_hit.asm_path_rel,
+            )
+            # Reader count for the JSON (informational) — vtable readers
+            # are usually 1-3 TUs that construct instances; we still
+            # surface the count so the decomper can sanity-check.
+            vtable_readers = find_reader_tus(placeholder, asm_root)
+            suggestion = Suggestion(
+                placeholder=meta,
+                candidate=vtable_candidate,
+                total_readers=len(vtable_readers),
+            )
+            return meta, [suggestion], []
+
     readers = find_reader_tus(placeholder, asm_root)
     if not readers:
         return meta, [], []
@@ -682,9 +987,6 @@ def suggest_names(
     candidates: list[ClassCandidate] = []
     seen_classes: set[str] = set()
     rejected_adjacency: list[dict[str, Any]] = []
-    query_is_placeholder = meta is not None and bool(
-        _PLACEHOLDER_NAME_RE.match(meta.name)
-    )
 
     # ---- Signal 1: adjacent named symbols (M-capped, brief 037) ----
     if meta is not None:
@@ -906,29 +1208,45 @@ def render_text(
         header_text = (
             f"`{c.header_rel}`" if c.header_rel is not None else "(header not found)"
         )
-        lines.append(
-            f"### {i}. `{c.qualified_name}` "
-            f"(confidence {s.confidence:.2f}, signal={s.signal_kind})"
-        )
-        lines.append("")
-        lines.append(f"  - Evidence: {c.evidence}")
-        lines.append(f"  - Header: {header_text}")
-        lines.append(f"  - Mangling template: `{c.mangling_template}`")
-        if c.statics:
+        # Brief 040: vtable-sourced candidates emit a concrete name
+        # (``__vt__<class>``) instead of a class-context template, so
+        # render them with a "Suggested rename" line and skip the
+        # static-member listing (vtables don't have data members).
+        if c.direct_symbol_name is not None:
             lines.append(
-                f"  - Existing static data members ({len(c.statics)}):"
+                f"### {i}. `{c.direct_symbol_name}` "
+                f"(confidence {s.confidence:.2f}, signal={s.signal_kind})"
             )
-            for stm in c.statics:
-                mangled = (
-                    stm.name
-                    + "__"
-                    + _mwcc_qualified_encoding(c.namespace_path, c.class_name)
-                )
-                lines.append(f"      - `{stm.type_text} {stm.name}` → `{mangled}`")
+            lines.append("")
+            lines.append(f"  - Suggested rename: `{c.direct_symbol_name}`")
+            lines.append(f"  - Class context: `{c.qualified_name}`")
+            lines.append(f"  - Header: {header_text}")
+            lines.append(f"  - Evidence: {c.evidence}")
+            lines.append(f"  - Vtable defined in: `{c.vtable_asm_path}`")
         else:
             lines.append(
-                "  - No existing static data members declared in the header."
+                f"### {i}. `{c.qualified_name}` "
+                f"(confidence {s.confidence:.2f}, signal={s.signal_kind})"
             )
+            lines.append("")
+            lines.append(f"  - Evidence: {c.evidence}")
+            lines.append(f"  - Header: {header_text}")
+            lines.append(f"  - Mangling template: `{c.mangling_template}`")
+            if c.statics:
+                lines.append(
+                    f"  - Existing static data members ({len(c.statics)}):"
+                )
+                for stm in c.statics:
+                    mangled = (
+                        stm.name
+                        + "__"
+                        + _mwcc_qualified_encoding(c.namespace_path, c.class_name)
+                    )
+                    lines.append(f"      - `{stm.type_text} {stm.name}` → `{mangled}`")
+            else:
+                lines.append(
+                    "  - No existing static data members declared in the header."
+                )
         lines.append("")
 
     if rejected_adjacency:
