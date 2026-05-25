@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# pre-push — verify build/us/main.dol SHA-1 hasn't drifted before
+# pushing. Catches broken pushes before they reach the brain's
+# review cycle.
+#
+# Xenoblade-specific design notes (vs spirit-caller's invariants-tool
+# pre-push):
+#
+#   1. We don't have a check_match_invariants.py equivalent yet, so
+#      this hook does the cheaper-but-strictly-correct thing: hash
+#      the build artifact and compare to the known-good baseline.
+#   2. SHA-1 is the project's source of truth (see CLAUDE.md §
+#      "Regions and expected hashes"). If it matches, the rebuild
+#      is byte-identical — no need for a separate invariants check.
+#   3. JP / EU not enforced yet because those baseroms aren't
+#      extracted on the user's machine (per docs/state.md). Easy
+#      to extend when they are.
+#
+# Graceful skips (exit 0 with a note):
+#   - No baserom (orig/us/sys/main.dol absent) — scaffolder-style
+#     toolchain-free worktree.
+#   - No build artifact (build/us/main.dol absent) — first push
+#     before any build.
+#   - No sha1sum / shasum / openssl on PATH — minimal Windows shell.
+#
+# Install: `python tools/install_git_hooks.py` from project root.
+# Bypass once: `git push --no-verify` (standard git flag).
+# Skip permanently: `git config --unset core.hooksPath`.
+#
+# Committed at .githooks/ and activated via core.hooksPath by the
+# installer; not at .git/hooks/ (untracked) so the behaviour is
+# consistent across the three worktrees (brain / decomper /
+# scaffolder).
+
+set -euo pipefail
+
+EXPECTED_SHA1_US="214b15173fa3bad23a067476d58d3933ad7037b7"
+BUILD_DOL="build/us/main.dol"
+
+# Fast-path: skip if no src/, config/, libs/, include/, or
+# configure.py changes are being pushed. Those are the only paths
+# that can move the DOL hash; docs/ or tools/-only pushes are
+# safe by construction.
+#
+# stdin for pre-push is the ref-update manifest:
+#   <local_ref> <local_sha> <remote_ref> <remote_sha> ...
+
+touched_interesting=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Deletion (local_sha is all zeroes) — nothing to check.
+    if [[ "${local_sha}" == "0000000000000000000000000000000000000000" ]]; then
+        continue
+    fi
+
+    # New branch (remote_sha is zeros): diff against merge base
+    # with origin/main, falling back to fork/main, then to the
+    # parent commit.
+    if [[ "${remote_sha}" == "0000000000000000000000000000000000000000" ]]; then
+        base=$(git merge-base "${local_sha}" origin/main 2>/dev/null \
+               || git merge-base "${local_sha}" fork/main 2>/dev/null \
+               || git rev-parse "${local_sha}^" 2>/dev/null \
+               || echo "")
+    else
+        base="${remote_sha}"
+    fi
+
+    if [[ -z "${base}" ]]; then
+        # Couldn't resolve a base — run the check conservatively.
+        touched_interesting=1
+        break
+    fi
+
+    if git diff --name-only "${base}" "${local_sha}" 2>/dev/null \
+            | grep -qE '^(config/|src/|libs/|include/|configure\.py$)'; then
+        touched_interesting=1
+        break
+    fi
+done
+
+if [[ "${touched_interesting}" -eq 0 ]]; then
+    # Nothing the DOL hash cares about.
+    exit 0
+fi
+
+# Graceful skip: this worktree doesn't have a baserom (scaffolder
+# role).
+if [[ ! -f "orig/us/sys/main.dol" ]]; then
+    echo "pre-push: no baserom at orig/us/sys/main.dol — skipping SHA-1 check." >&2
+    echo "pre-push: this looks like a toolchain-free worktree (scaffolder)." >&2
+    exit 0
+fi
+
+# Graceful skip: build artifact missing. Don't auto-build — that
+# would be slow and surprising in a hook.
+if [[ ! -f "${BUILD_DOL}" ]]; then
+    echo "pre-push: no build artifact at ${BUILD_DOL} — can't verify." >&2
+    echo "pre-push: run 'python configure.py --version us && ninja' to enable check." >&2
+    echo "pre-push: bypass once: git push --no-verify" >&2
+    exit 0
+fi
+
+# Compute the SHA-1. Cross-platform: prefer sha1sum (Linux / Git
+# Bash on Windows), fall back to shasum -a 1 (macOS default),
+# then openssl.
+if command -v sha1sum >/dev/null 2>&1; then
+    got=$(sha1sum "${BUILD_DOL}" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+    got=$(shasum -a 1 "${BUILD_DOL}" | awk '{print $1}')
+elif command -v openssl >/dev/null 2>&1; then
+    got=$(openssl sha1 "${BUILD_DOL}" | awk '{print $NF}')
+else
+    echo "pre-push: no sha1sum / shasum / openssl available — skipping." >&2
+    exit 0
+fi
+
+if [[ "${got}" != "${EXPECTED_SHA1_US}" ]]; then
+    echo >&2
+    echo "pre-push: build/us/main.dol SHA-1 mismatch — pushing would break the baseline." >&2
+    echo >&2
+    echo "   expected: ${EXPECTED_SHA1_US}" >&2
+    echo "   got:      ${got}" >&2
+    echo >&2
+    echo "   Re-run 'python configure.py --version us && ninja' and verify." >&2
+    echo "   Bypass once: git push --no-verify" >&2
+    echo >&2
+    exit 1
+fi
+
+exit 0

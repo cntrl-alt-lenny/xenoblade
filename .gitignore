@@ -43,8 +43,9 @@ compile_commands.json
 
 # cntrl_alt_lenny's three-agent decomp framework — brain/decomper/scaffolder
 # Claude Code sessions (see github.com/cntrl-alt-lenny/decomp-agent-framework).
-# Framework files (.claude/, AGENTS.md, CLAUDE.md, docs/briefs/, docs/state.md,
-# docs/decomp-workflow.md, docs/research/) are tracked in this fork so a fresh
+# Framework files (.claude/, .githooks/, AGENTS.md, CLAUDE.md, docs/briefs/,
+# docs/state.md, docs/decomp-workflow.md, docs/research/, and
+# tools/install_git_hooks.py) are tracked in this fork so a fresh
 # `git clone` on any machine works out of the box.
 #
 # To submit upstream PRs (cntrl-alt-lenny:<branch> → xbret:main) without

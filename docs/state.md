@@ -9,7 +9,13 @@ a minute. Keep it short. If you're the brain reading this cold:
 `git log --oneline -20` and the open-PR list fill in whatever this
 misses.
 
-**Last updated:** 2026-05-25 (late). Brain on Windows 11 PC. US build green @ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`; 3 PRs merged today; **NW4R data matching jumped from 88.24% to 97.18%** via PR #39's `g3d_anmclr` carve. Briefs 040 + 041 dispatched.
+**Last updated:** 2026-05-25 (late). Brain on Windows 11 PC, then Mac
+mid-session for framework parity. US build green @ SHA1
+`214b15173fa3bad23a067476d58d3933ad7037b7`; 3 PRs merged today; **NW4R
+data matching jumped from 88.24% to 97.18%** via PR #39's `g3d_anmclr`
+carve. Briefs 040 + 041 dispatched. Then: ported spirit-caller's
+`.githooks/pre-push` (SHA-1-gate) + `tools/install_git_hooks.py` —
+catches a corrupted-build push before brain has to review it.
 
 ## Headline
 
@@ -92,3 +98,12 @@ those regions.)
   `https://github.com/xbret/xenoblade.git`. Branch off `upstream/main`
   for upstream-targeted PRs. Worktrees share the remote config.
 - **Open warnings:** None — sjiswrap warning was the last known one.
+- **Pre-push hook:** `.githooks/pre-push` installed via
+  `python tools/install_git_hooks.py`. On any worktree that has
+  `build/us/main.dol`, it SHA-1-checks the DOL against the baseline
+  before allowing push of changes under `config/`, `src/`, `libs/`,
+  `include/`, or `configure.py`. Gracefully skips on
+  scaffolder-style toolchain-free worktrees (no baserom). Bypass
+  once with `git push --no-verify`. Each fresh worktree needs
+  `python tools/install_git_hooks.py` once to set
+  `core.hooksPath`.
