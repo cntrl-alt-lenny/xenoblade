@@ -9,13 +9,34 @@ a minute. Keep it short. If you're the brain reading this cold:
 `git log --oneline -20` and the open-PR list fill in whatever this
 misses.
 
-**Last updated:** 2026-05-25 (late). Brain on Windows 11 PC, then Mac
-mid-session for framework parity. US build green @ SHA1
-`214b15173fa3bad23a067476d58d3933ad7037b7`; 3 PRs merged today; **NW4R
-data matching jumped from 88.24% to 97.18%** via PR #39's `g3d_anmclr`
-carve. Briefs 040 + 041 dispatched. Then: ported spirit-caller's
-`.githooks/pre-push` (SHA-1-gate) + `tools/install_git_hooks.py` —
-catches a corrupted-build push before brain has to review it.
+**Last updated:** 2026-05-26 (morning). Brain on Mac. US build green
+@ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`. Opened **three
+upstream PRs** against `xbret/xenoblade` for the eligible decomp
+work done in the recent fork cycles:
+
+- [xbret#31](https://github.com/xbret/xenoblade/pull/31) — 22 symbol
+  renames in `config/us/symbols.txt` (21 cf/CTTask vtables + spScene).
+  Cherry-picked surgically; diff is exactly 22 insertions + 22
+  deletions vs upstream main.
+- [xbret#32](https://github.com/xbret/xenoblade/pull/32) —
+  `g3d_anmclr.cpp` carve in `config/us/splits.txt` (nw4r_data.s →
+  dataa + datab, 4 per-TU ranges). Pure config win, enables 88.24%
+  → 97.18% NW4R data matching once the TU flips.
+- [xbret#33](https://github.com/xbret/xenoblade/pull/33) —
+  `tools/check_port_compat.py` (new tool, ~838 lines). Optional
+  source-port pre-vetting tool. Fork-isms scrubbed.
+
+PR #40 equivalent (em-dash fix) **not upstreamed**: the bug doesn't
+exist on upstream's `include/functions.hpp` — that file's comment
+block (where the em dash lived) was added by fork-only commit
+`a10ebbc` as part of brief 010's extern-C wrap. Both bug and fix
+are fork-local.
+
+Yesterday's recap (Windows): 3 fork PRs merged (#38 renames, #39
+carve+tool, #40 em-dash). Briefs 040 + 041 dispatched. Ported
+spirit-caller's `.githooks/pre-push` (SHA-1-gate) +
+`tools/install_git_hooks.py` — catches corrupted-build push before
+brain has to review it.
 
 ## Headline
 
@@ -64,6 +85,19 @@ those regions.)
   `tools/suggest_symbol_name.py`. No PR yet.
 - **Brief 041** (decomper): retry `g3d_anmclr.cpp` flip US.
   No PR yet.
+
+### Upstream PRs awaiting xbret review
+
+| PR | What | Risk | Notes |
+|---|---|---|---|
+| [xbret#31](https://github.com/xbret/xenoblade/pull/31) | 22 placeholder renames in US symbols.txt | None (TUs still NonMatching; names are informational) | 21 vtables + 1 spScene |
+| [xbret#32](https://github.com/xbret/xenoblade/pull/32) | g3d_anmclr.cpp carve in US splits.txt | None today (SHA-1 unchanged); enables future flip | 88.24% → 97.18% NW4R data once TU flips |
+| [xbret#33](https://github.com/xbret/xenoblade/pull/33) | New tools/check_port_compat.py | None (no config/build impact) | Optional — maintainer may decline if upstream doesn't do source-porting |
+
+Each lives on a `upstream-*` branch on fork that's based on
+`origin/main` (xbret upstream on Mac; on Windows the remote names
+are swapped — `upstream/main`). Don't delete those branches until
+the PRs are merged or closed.
 
 ## Next-brain TODO
 
