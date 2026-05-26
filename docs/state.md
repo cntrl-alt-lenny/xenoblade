@@ -9,14 +9,23 @@ a minute. Keep it short. If you're the brain reading this cold:
 `git log --oneline -20` and the open-PR list fill in whatever this
 misses.
 
-**Last updated:** 2026-05-26 (midday). Brain on Mac. US build green
-@ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`. Cycle 21 closed:
-**PR #42 merged** (scaffolder vtable detector — addresses PR #38's
-review finding, 21/21 against PR #38's renamed vtables, live-tested
-1/1 on still-unnamed `lbl_eu_80526830` → `__vt__Q22cf5CfRes` at 1.00).
-**PR #41 closed** (decomper's g3d_anmclr flip attempt — fails with
-new blocker; brief 039's `.sdata` carve over-claimed `lbl_eu_80663458`
-by 8 bytes). Two follow-up briefs scoped (042 + 043).
+**Last updated:** 2026-05-26 (afternoon). Brain on Mac (native arm64
+build works fine — ninja + wibo run through unchanged). US build
+green @ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`.
+
+**Cycle 22 closed** (both PRs merged at `f11177c`):
+- **PR #43** (scaffolder, brief 042) — drop `g3d_anmclr.cpp`'s
+  `.sdata` carve; re-absorb `lbl_eu_80663458` back into
+  `nw4r_dataa.s`. The orphan turned out to be two namespace-level
+  function pointers (`PlayPolicy_Onetime` + `PlayPolicy_Loop` in
+  `nw4r::g3d`), not a class static. SHA-1 verified, brain-rebuilt.
+- **PR #44** (decomper, brief 043) — **25 vtable renames** in
+  `config/us/symbols.txt` using PR #42's new detector. All at
+  confidence 1.00. First production use of the detector validated
+  the design. 264 vtable-shape candidates remain (room for wave 3+).
+
+Cycle 21 (earlier today): PR #42 merged (vtable detector), PR #41
+closed (g3d_anmclr flip blocker identified, split into 042 + 043).
 
 Earlier today: opened **three upstream PRs** against `xbret/xenoblade`
 for the eligible decomp work done in the recent fork cycles:
@@ -86,30 +95,40 @@ those regions.)
   in `config/us/splits.txt`. NW4R data: 60 → 276 of 284 matched bytes
   (97.18%).
 
-## Cycle 21 outcome (just-closed)
+## Cycle 22 outcome (just-closed)
 
-- **PR #42 merged** (`c7f6528`): scaffolder vtable-shape detector in
-  `tools/suggest_symbol_name.py`. Tools-only, SHA-1 unchanged.
-  21/21 detection rate on PR #38's renamed vtables, live-tested
-  against still-unnamed `lbl_eu_80526830` (returns
-  `__vt__Q22cf5CfRes` at confidence 1.00). Closes brief 040.
-- **PR #41 closed** (not merged): decomper's `g3d_anmclr` flip
-  attempt produces 4 link errors for `undefined: lbl_eu_80663458`.
-  Root cause: brief 039's `.sdata 0x80663458-0x80663460` carve gave
-  `g3d_anmclr.cpp` a range that contains an 8-byte symbol no class
-  in the trimmed TU actually owns. Neighbour at 0x80663460 is
-  `smBaseUpdateRate__Q34nw4r3g3d9FrameCtrl` — a `FrameCtrl` static.
-  Brain confirmed analysis; closed PR with comment. Splits into
-  brief 042 (scaffolder fix) + brief 043 (decomper next wave).
+- **PR #43 merged**: scaffolder dropped `g3d_anmclr.cpp`'s `.sdata`
+  carve (1 line removed) and extended `nw4r_dataa.s`'s `.sdata` end
+  to absorb `lbl_eu_80663458` (1 line edited). Closes brief 042.
+  Scaffolder did their own local build via symlinked baserom —
+  SHA-1 green there + brain confirmed locally on the merged result.
+  NW4R Data ratio dipped from 97.18% to 97.10% as expected (the
+  8 bytes move from per-TU count back to catch-all).
+- **PR #44 merged**: decomper did **25 vtable renames** in
+  `config/us/symbols.txt` using PR #42's new detector. All
+  confidence 1.00, all derived from `__dt__<class>Fv` destructor
+  entries. First production use validated the detector design.
+  Skipped 2 collisions (one points at a curious double-define of
+  `nw4r::g3d::ScnGroup` in `build/us/asm/` between `nw4r_data.s`
+  and `nw4r_datab.s` — likely stale-asm artifact post-carve,
+  worth a scaffolder sanity-check). Closes brief 043. SHA-1
+  brain-verified.
 
-## In flight (post this brain-PR)
+## Cycle 23 — not yet dispatched
 
-- **Brief 042** (scaffolder): drop `g3d_anmclr.cpp`'s `.sdata` carve
-  (over-claimed `lbl_eu_80663458`); absorb back into `nw4r_dataa.s`.
-  Two-line splits.txt edit. No PR yet.
-- **Brief 043** (decomper): use PR #42's new vtable detector to find
-  + rename 10–25 more vtable placeholders in `config/us/symbols.txt`.
-  Independent of brief 042. No PR yet.
+**Suggested briefs** (ready to write when user fires the next cycle):
+- **044** (scaffolder): investigate the `ScnGroup` double-define
+  artifact the decomper flagged in PR #44's notes — is
+  `build/us/asm/` carrying a stale `nw4r_data.s` from pre-carve
+  state? If yes, document the `rm -rf build/us/asm/ && ninja`
+  recovery in `AGENTS.md` so other agents don't trip on it.
+- **045** (decomper): vtable rename wave 3 — same pattern as
+  wave 2, target 25 more from the remaining ~264 candidates.
+  Most likely CDevice* / CLib* family next.
+
+Alternative for decomper: retry the `g3d_anmclr.cpp` flip now that
+brief 042 cleared the blocker (could be either decomper or wave-3
+candidate — flip is higher-value, wave-3 is lower-risk).
 
 ### Upstream PRs awaiting xbret review
 
@@ -126,24 +145,20 @@ the PRs are merged or closed.
 
 ## Next-brain TODO
 
-1. Review the two incoming PRs (brief 042 from scaffolder, 043 from
-   decomper). Run the build, verify SHA1, summarise in plain English
-   for cntrl_alt_lenny, offer to merge.
-2. After brief 042 lands (`.sdata` carve fixed), scope a brief 044
-   to retry the `g3d_anmclr.cpp` flip. This is essentially brief 041
-   retried with the unblocker in place.
-3. Refresh `build/us/report.json` top-10 once 042 + 043 are in.
-   `CPadManager` (99.5%), `snd_TaskManager` (98.3%),
-   `CDeviceFileJob` (96.2%) remain at the top of the
-   close-to-matching list.
-4. Watch the three upstream PRs (xbret#31/#32/#33) for review
+1. If user fires cycle 23: write briefs 044 + 045 (or 044 +
+   `g3d_anmclr` flip retry — see "Cycle 23" section above).
+2. Watch the three upstream PRs (xbret#31/#32/#33) for review
    comments; respond where needed.
-5. Consider whether to extract JP / EU regions next. cntrl_alt_lenny's
-   call — purely scope, not technical.
-6. Agent-inbox check: `.git/agent-inbox/` on the Windows brain only
-   (this Mac brain doesn't host decomper/scaffolder worktrees).
-   The two cycle-21 agents pushed PRs directly, so no inbox notes
-   to harvest this round.
+3. Refresh `build/us/report.json` top-10 if cycle 23 brings new
+   matches. `CPadManager` (99.5%), `snd_TaskManager` (98.3%),
+   `CDeviceFileJob` (96.2%) still top of the close-to-matching
+   list.
+4. Consider whether to extract JP / EU regions next.
+   cntrl_alt_lenny's call — purely scope, not technical.
+5. Agent-inbox check: `.git/agent-inbox/` on the Windows brain
+   only (this Mac brain doesn't host decomper/scaffolder
+   worktrees). Cycle 22 agents pushed PRs directly, so no inbox
+   notes to harvest this round.
 
 ## Cross-machine handoff notes
 
