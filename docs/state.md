@@ -9,9 +9,57 @@ a minute. Keep it short. If you're the brain reading this cold:
 `git log --oneline -20` and the open-PR list fill in whatever this
 misses.
 
-**Last updated:** 2026-05-26 (afternoon). Brain on Mac (native arm64
-build works fine — ninja + wibo run through unchanged). US build
-green @ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`.
+**Last updated:** 2026-05-26 (late morning). Brain on Mac (native
+arm64 build works fine — ninja + wibo run through unchanged). US
+build green @ SHA1 `214b15173fa3bad23a067476d58d3933ad7037b7`.
+
+### Upstream PR aftermath
+
+All three upstream PRs (xbret#31/#32/#33) **closed by collaborator
+CelestialAmber** at ~08:06 UTC with the comment on #31:
+
+> "I'm sorry, but I don't want to accept AI assisted commits."
+
+#32 and #33 were closed seconds later without comment (batch close).
+Hard "no" from upstream on AI-attributed work. **Standing rule for
+next brain: don't open more upstream PRs until cntrl_alt_lenny has
+discussed an attribution change with the maintainer.** Fork work
+continues unaffected — these were the first attempt at upstreaming
+and the policy was unknown beforehand.
+
+### Cycle 23 closed (PR #45 merged, PR #46 closed)
+
+- **PR #45** (scaffolder, brief 044) merged at `bb41537`. Confirmed
+  the stale-asm hypothesis (`nw4r_data.s` lingered in
+  `build/us/asm/` after PR #39 carve). Added a Troubleshooting
+  section to `AGENTS.md` documenting `rm -rf build/<region>/asm/
+  && ninja` recovery, plus a defensive stderr warn in the vtable
+  detector when `.obj` is found in >1 asm file. Brain-rebuilt;
+  SHA-1 green.
+- **PR #46** (decomper, brief 045) closed at decomper's request.
+  Flip attempt #2 of `g3d_anmclr.cpp`. Per-TU report shows 100%
+  across every section (data, code, sdata2, text) — the TU
+  itself is matched. But DOL SHA-1 shifts by +8 bytes due to
+  cascade. Root cause via `dtk elf info`: inline
+  `GetAnmPlayPolicy` in `g3d_anmobj.h` has a function-static
+  `policyTable[ANM_POLICY_MAX]` of 8 bytes that every TU
+  including the header emits privately. Decomper's analysis +
+  fix recommendation lined up correctly; the fix is header-lane,
+  not source-lane.
+
+### Cycle 24 dispatched
+
+- **Brief 046** (scaffolder): move `policyTable` out of inline
+  `GetAnmPlayPolicy` in `g3d_anmobj.h`. One header + one source
+  edit. Unblocks the g3d_anmclr flip.
+- **Brief 047** (decomper): wave 3 of vtable renames using PR
+  #42's detector. Independent of 046. Target 25 from the
+  ~264 remaining candidates.
+- **Brief 048** (will be scoped after 046 lands): third attempt
+  at the `g3d_anmclr.cpp` flip — should be third-time lucky if
+  brief 046's cascade theory holds.
+
+---
 
 **Cycle 22 closed** (both PRs merged at `f11177c`):
 - **PR #43** (scaffolder, brief 042) — drop `g3d_anmclr.cpp`'s
