@@ -240,6 +240,38 @@ branch. No-one else touches it without coordination.
    worktree because `main` is checked out in the main clone, finish
    with `git push origin --delete <branch>`.
 
+## Troubleshooting
+
+### Stale `build/<region>/asm/` files after splits.txt changes
+
+If you see a symbol defined twice in `build/<region>/asm/` (same
+`.obj <name>, global` block in two different `.s` files), that's a
+stale-asm artifact from a previous splits.txt configuration. dtk
+emits fresh `.s` files when split boundaries change but doesn't
+delete the old ones, so the asm tree can carry leftovers from a
+prior layout — e.g. `nw4r_data.s` (pre-PR-#39 catch-all) sitting
+alongside the post-carve `nw4r_dataa.s` + `nw4r_datab.s`.
+
+**Recovery:**
+
+```sh
+rm -rf build/<region>/asm/
+python configure.py --version <region>
+ninja
+```
+
+After the rebuild, the stale files don't return and each symbol is
+defined exactly once. **SHA-1 is unaffected** — the live build uses
+the current splits.txt, so the produced `main.dol` was always
+correct; only the on-disk asm tree was misleading. Tools that walk
+`build/<region>/asm/` to locate `.obj` blocks (e.g.
+`tools/suggest_symbol_name.py`'s vtable detector) can pick the wrong
+file when stale leftovers exist, which is the symptom worth watching
+for.
+
+See `docs/briefs/044-scaffolder-scngroup-double-define-investigate.md`
+for the original investigation.
+
 ## Adding or retiring agents
 
 cntrl_alt_lenny says, in plain English, something like:

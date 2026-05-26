@@ -370,20 +370,44 @@ def _find_definition_asm(placeholder: str, asm_root: Path) -> Path | None:
     Matches both plain (``.obj name, global``) and quoted (``.obj
     "name", global``) forms — templated symbols like
     ``CTTask<Q22cf9CfResTask>`` are emitted quoted.
+
+    Defensive (brief 044): if the same ``.obj`` block appears in more
+    than one ``.s`` file, that's a stale-asm artifact from a previous
+    splits.txt configuration (dtk emits fresh files when split
+    boundaries change but doesn't delete the old ones). We warn to
+    stderr and return the first match; the caller's suggestion is
+    still computable from any one definition, but the user should
+    run ``rm -rf build/<region>/asm/ && ninja`` to clear leftovers.
+    See AGENTS.md "Troubleshooting" section.
     """
 
     plain, quoted = _obj_line_variants(_OBJ_LINE_PREFIX, placeholder)
     plain_with_comma = f"{plain},"
     quoted_with_comma = f"{quoted},"
+    matches: list[Path] = []
     for path in sorted(asm_root.rglob("*.s")):
         try:
             with path.open("r", encoding="utf-8", errors="replace") as handle:
                 for line in handle:
                     if line.startswith(plain_with_comma) or line.startswith(quoted_with_comma):
-                        return path
+                        matches.append(path)
+                        break
         except OSError:
             continue
-    return None
+    if len(matches) > 1:
+        rels = [
+            (m.relative_to(asm_root).as_posix() if m.is_absolute() else m.as_posix())
+            for m in matches
+        ]
+        print(
+            f"warning: `.obj {placeholder}` defined in {len(matches)} asm "
+            f"files: {', '.join(rels)} — likely a stale-asm artifact from a "
+            f"prior splits.txt configuration. Run `rm -rf {asm_root} && "
+            f"ninja` to clear leftovers (SHA-1 unaffected; see AGENTS.md "
+            f"Troubleshooting).",
+            file=sys.stderr,
+        )
+    return matches[0] if matches else None
 
 
 def _extract_obj_block(asm_path: Path, placeholder: str) -> list[str] | None:
