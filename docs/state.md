@@ -114,21 +114,18 @@ those regions.)
   worth a scaffolder sanity-check). Closes brief 043. SHA-1
   brain-verified.
 
-## Cycle 23 — not yet dispatched
+## Cycle 23 — dispatched
 
-**Suggested briefs** (ready to write when user fires the next cycle):
-- **044** (scaffolder): investigate the `ScnGroup` double-define
-  artifact the decomper flagged in PR #44's notes — is
-  `build/us/asm/` carrying a stale `nw4r_data.s` from pre-carve
-  state? If yes, document the `rm -rf build/us/asm/ && ninja`
-  recovery in `AGENTS.md` so other agents don't trip on it.
-- **045** (decomper): vtable rename wave 3 — same pattern as
-  wave 2, target 25 more from the remaining ~264 candidates.
-  Most likely CDevice* / CLib* family next.
-
-Alternative for decomper: retry the `g3d_anmclr.cpp` flip now that
-brief 042 cleared the blocker (could be either decomper or wave-3
-candidate — flip is higher-value, wave-3 is lower-risk).
+- **Brief 044** (scaffolder): investigate + document the `ScnGroup`
+  double-define artifact the decomper flagged in PR #44's notes
+  (stale `build/us/asm/` files from pre-carve splits.txt state).
+  Document the `rm -rf build/<region>/asm/ && ninja` recovery in
+  AGENTS.md. Optional defensive update to the vtable detector.
+- **Brief 045** (decomper): retry the `g3d_anmclr.cpp` flip now
+  that brief 042 cleared the blocker. Closes the loop opened in
+  briefs 039/041 — should hit NW4R Data 100% if it works.
+  Same bail-and-report rule as brief 041 if a new blocker shows
+  up.
 
 ### Upstream PRs awaiting xbret review
 
